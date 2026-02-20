@@ -610,7 +610,13 @@
       doc.addImage(imgData, 'JPEG', 0, 0, 210, 297);
     }
 
-    const filename = `invoice_${new Date().toISOString().slice(0,10)}.pdf`;
+    const issueLabel = jpDate(state.common.common_issue_date) || todayISO().replaceAll('-', '.');
+    const baseCustomer = (invoices[0]?.customer || '請求先未設定').trim();
+    const customerLabel = invoices.length === 1
+      ? baseCustomer
+      : `${baseCustomer}ほか${invoices.length-1}件`;
+    const safeName = `${issueLabel} - ${customerLabel}`.replace(/[\\/:*?"<>|]/g, '_');
+    const filename = `${safeName}.pdf`;
     doc.save(filename);
     toast('PDFを作成しました');
   }
