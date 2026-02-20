@@ -105,7 +105,7 @@
     }
     .a4 .table{
       position:absolute;
-      top:54mm;
+      top:57mm;
       left:12mm;
       right:12mm;
       border:1px solid #000;
@@ -262,17 +262,17 @@
         <tbody id="p_items_body"></tbody>
       </table>
 
-      <div class="summary">
+      <div id="p_summary" class="summary">
         <div class="summaryRow"><span class="k">小計</span><span id="p_sub" class="v"></span></div>
         <div class="summaryRow"><span class="k">消費税</span><span id="p_tax" class="v"></span></div>
         <div class="summaryLine"></div>
         <div class="summaryRow"><span class="k">合計</span><span id="p_total" class="v"></span></div>
       </div>
 
-      <div class="bankTitle">振込先</div>
+      <div id="p_bank_title" class="bankTitle">振込先</div>
       <div id="p_bank" class="bankText"></div>
 
-      <div class="remarkTitle">備考</div>
+      <div id="p_remark_title" class="remarkTitle">備考</div>
       <div id="p_remark" class="remarkText"></div>
     </div>
   </div>
@@ -562,6 +562,35 @@
       </tr>
     `).join('');
     body.innerHTML = rows || '<tr><td></td><td></td><td class="alignC"></td><td class="alignR"></td></tr>';
+
+    // 明細行数に応じて下部ブロックを自動配置（重なり防止）
+    const table = document.querySelector('#a4 .table');
+    const summary = $('#p_summary');
+    const bankTitle = $('#p_bank_title');
+    const bankText = $('#p_bank');
+    const remarkTitle = $('#p_remark_title');
+    const remarkText = $('#p_remark');
+    if (table && summary && bankTitle && bankText && remarkTitle && remarkText){
+      const px = (mm)=>Math.round(mm * 3.7795);
+      const tableBottom = table.offsetTop + table.offsetHeight;
+
+      summary.style.top = `${tableBottom + px(3)}px`;
+      summary.style.bottom = 'auto';
+
+      const summaryBottom = summary.offsetTop + summary.offsetHeight;
+      bankTitle.style.top = `${summaryBottom + px(3)}px`;
+      bankTitle.style.bottom = 'auto';
+
+      bankText.style.top = `${bankTitle.offsetTop + px(5)}px`;
+      bankText.style.bottom = 'auto';
+
+      const bankBottom = bankText.offsetTop + bankText.offsetHeight;
+      remarkTitle.style.top = `${bankBottom + px(3)}px`;
+      remarkTitle.style.bottom = 'auto';
+
+      remarkText.style.top = `${remarkTitle.offsetTop + px(5)}px`;
+      remarkText.style.bottom = 'auto';
+    }
 
     const {sub,tax,total}=calc(inv);
     $('#p_sub').textContent = `¥${fmtYen(sub)}`;
