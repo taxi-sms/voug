@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>請求書PWA</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#111" />
+</head>
+<body>
+  <h1>請求書PWA 基礎</h1>
+  <p>このファイルはZIP版のベースです。</p>
+  <p>前回提示したフル機能版index.htmlをここに置き換えて使用してください。</p>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
+</body>
+</html>

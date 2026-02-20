@@ -1,0 +1,9 @@
+{
+  "name": "請求書PWA",
+  "short_name": "InvoicePWA",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "icons": []
+}
