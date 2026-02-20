@@ -2,20 +2,229 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>請求書PWA</title>
-  <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111" />
-</head>
-<body>
-  <h1>請求書PWA 基礎</h1>
-  <p>このファイルはZIP版のベースです。</p>
-  <p>前回提示したフル機能版index.htmlをここに置き換えて使用してください。</p>
-
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js');
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root{ --bg:#fff; --text:#111; --muted:#666; --border:#111; --card:#f6f6f6; }
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;}
+    .wrap{max-width:920px;margin:0 auto;padding:14px;}
+    h1{font-size:18px;margin:0 0 12px;}
+    .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
+    button{border:2px solid var(--border);background:#fff;padding:10px 12px;font-weight:900;border-radius:10px;}
+    button.primary{background:#111;color:#fff;}
+    .small{font-size:12px;color:var(--muted);line-height:1.5;}
+    .card{border:2px solid var(--border);border-radius:14px;padding:12px;background:#fff;margin:10px 0;}
+    .sectionTitle{font-weight:900;margin:4px 0 10px;}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px;}
+    .row{display:grid;grid-template-columns: 130px 1fr; gap:10px; align-items:center;}
+    .label{font-size:12px;color:var(--muted);font-weight:900;}
+    input,textarea{
+      width:100%; box-sizing:border-box;
+      border:2px solid var(--border);
+      border-radius:10px;
+      padding:10px 10px;
+      font-size:16px;
+      background:#fff;
     }
-  </script>
-</body>
-</html>
+    textarea{min-height:70px;resize:vertical;}
+    .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+    .invoiceHeader .left{min-width:220px}
+    .pill{display:inline-block;border:2px solid var(--border);border-radius:999px;padding:4px 10px;font-weight:900;font-size:12px;background:var(--card)}
+    .danger{border-color:#c00;color:#c00}
+    .hr{height:1px;background:#ddd;margin:10px 0;}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    @media (max-width:720px){ .row{grid-template-columns:1fr;} .two{grid-template-columns:1fr;} }
+  </style>
+
+  <!-- jsPDF (PDF生成) -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>請求書PWA（請求先ごとに追加 → A4 PDF出力）</h1>
+    <div class="small">
+      ・「請求先カード」を追加して、縦に入力していくだけ。<br>
+      ・PDFはA4で自動作成→ダウンロード（iPhoneなら共有から「“ファイル”に保存」が確実）。<br>
+      ・このテンプレは、あなたの請求書にある項目（宛名/日付/振込先/品名/形式/数量/単価/消費税/小計/合計/備考など）に合わせています。:contentReference[oaicite:1]{index=1}
+    </div>
+
+    <div class="bar">
+      <button id="addBtn" class="primary">＋ 請求先カードを追加</button>
+      <button id="saveBtn">入力を保存（端末内）</button>
+      <button id="loadBtn">保存を読み込み</button>
+      <button id="clearBtn" class="danger">保存を消去</button>
+    </div>
+
+    <div class="card">
+      <div class="sectionTitle">自社情報（共通）</div>
+      <div class="grid">
+        <div class="row">
+          <div class="label">発行元名</div>
+          <input id="issuer_name" placeholder="例）VOUG" />
+        </div>
+        <div class="row">
+          <div class="label">住所</div>
+          <input id="issuer_addr" placeholder="例）札幌市西区…" />
+        </div>
+        <div class="two">
+          <div class="row">
+            <div class="label">TEL</div>
+            <input id="issuer_tel" placeholder="例）011-xxx-xxxx" />
+          </div>
+          <div class="row">
+            <div class="label">担当/連絡先</div>
+            <input id="issuer_person" placeholder="例）担当 畑野千春 090-xxxx-xxxx" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">メール</div>
+          <input id="issuer_email" placeholder="例）xxx@example.com" />
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="sectionTitle">振込先（共通）</div>
+        <div class="grid">
+          <div class="row">
+            <div class="label">振込先（メイン）</div>
+            <input id="bank_main" placeholder="例）旭川信用金庫 本店 普通口座 1472165 口座名 …" />
+          </div>
+          <div class="row">
+            <div class="label">予備口座</div>
+            <input id="bank_sub" placeholder="例）楽天銀行 チェロ支店(214) 普通口座 …" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="invoices"></div>
+
+    <div class="bar">
+      <button id="pdfAllBtn" class="primary">PDFをまとめて作成（各請求先＝1ページ）</button>
+    </div>
+
+    <div class="small">
+      PWA化：iPhoneはSafariで開いて「共有」→「ホーム画面に追加」。AndroidはChromeで「アプリをインストール」。<br>
+      オフライン動作は、sw.js が読み込まれていれば一部キャッシュされます（初回はオンライン必須）。
+    </div>
+  </div>
+
+<script>
+  // ===== PWA =====
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+  }
+
+  const $ = (sel) => document.querySelector(sel);
+  const invoicesEl = $('#invoices');
+
+  const DEFAULT_COMMON = {
+    issuer_name: 'VOUG',
+    issuer_addr: '札幌市西区二十四軒２条２丁目４－２１ マンションニュー琴似１F B号',
+    issuer_tel: '011-614-5286',
+    issuer_person: '担当 畑野千春 090-7842-8798',
+    issuer_email: 'voug286@gmeil.com',
+    bank_main: '旭川信用金庫 本店 普通口座 1472165 口座名 有限会社ニューアロー',
+    bank_sub: '楽天銀行 チェロ支店（214） 普通口座 1310243 口座名 ハタノチハル'
+  };
+
+  // あなたの請求書の例（D-1X / 2月分 / 1台 / 35,000 / 税3,500 / 合計38,500）:contentReference[oaicite:2]{index=2}
+  function defaultInvoice() {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth()+1).padStart(2,'0');
+    const d = String(today.getDate()).padStart(2,'0');
+
+    return {
+      customer: 'のみくい処 旨や 様',
+      issue_date: `${y}.${m}.${d}`,
+      due_date: '（未設定）',
+      item_name: 'D-1X',
+      item_form: '2月分',
+      qty: 1,
+      unit_price: 35000,
+      tax_rate: 0.10,
+      remarks: ''
+    };
+  }
+
+  function fmtYen(n){
+    const num = Number(n || 0);
+    return num.toLocaleString('ja-JP');
+  }
+
+  function calc(inv){
+    const qty = Number(inv.qty || 0);
+    const unit = Number(inv.unit_price || 0);
+    const rate = Number(inv.tax_rate ?? 0.10);
+    const sub = qty * unit;
+    const tax = Math.round(sub * rate);
+    const total = sub + tax;
+    return {sub, tax, total};
+  }
+
+  function createCard(inv, idx){
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.dataset.idx = String(idx);
+
+    const money = calc(inv);
+
+    c.innerHTML = `
+      <div class="invoiceHeader">
+        <div class="left">
+          <div class="pill">請求先 #${idx+1}</div>
+          <div class="small" style="margin-top:6px;">このカード1枚＝PDF 1ページ</div>
+        </div>
+        <div class="bar" style="margin:0;">
+          <button class="pdfBtn primary">この請求先のPDF</button>
+          <button class="delBtn danger">削除</button>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:10px;">
+        <div class="row">
+          <div class="label">宛名（請求先）</div>
+          <input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）◯◯ 様" />
+        </div>
+
+        <div class="two">
+          <div class="row">
+            <div class="label">請求日</div>
+            <input class="issue_date" value="${escapeHtml(inv.issue_date)}" placeholder="例）2026.2.20" />
+          </div>
+          <div class="row">
+            <div class="label">振込期限</div>
+            <input class="due_date" value="${escapeHtml(inv.due_date)}" placeholder="例）2026.2.27" />
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="sectionTitle">明細（1行の基本形）</div>
+
+        <div class="row">
+          <div class="label">品名</div>
+          <input class="item_name" value="${escapeHtml(inv.item_name)}" placeholder="例）D-1X" />
+        </div>
+        <div class="row">
+          <div class="label">形式</div>
+          <input class="item_form" value="${escapeHtml(inv.item_form)}" placeholder="例）2月分" />
+        </div>
+
+        <div class="two">
+          <div class="row">
+            <div class="label">数量</div>
+            <input class="qty" inputmode="numeric" value="${inv.qty}" />
+          </div>
+          <div class="row">
+            <div class="label">単価（円）</div>
+            <input class="unit_price" inputmode="numeric" value="${inv.unit_price}" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="label">税率</div>
+          <input class="tax_rate" inputmode="decimal
