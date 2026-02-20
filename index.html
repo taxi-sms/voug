@@ -3,9 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>請求書PWA</title>
+  <title>請求書PWA（完全同一レイアウト版）</title>
   <meta name="theme-color" content="#111111" />
   <link rel="manifest" href="manifest.json" />
+
+  <!-- 画面表示フォント（PDFはキャンバス化するので日本語OK） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+
   <style>
     :root{ --bg:#fff; --text:#111; --muted:#666; --border:#111; --card:#f6f6f6; }
     html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;}
@@ -47,23 +53,145 @@
       font-size:12px; font-weight:900;
       opacity:0; pointer-events:none; transition:opacity .2s;
       max-width:90vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      z-index:9999;
     }
     .toast.show{opacity:1;}
     .hint{font-size:12px;color:var(--muted);margin-top:8px}
+
+    /* ===== A4請求書（PDF化対象） ===== */
+    .a4stage{position:absolute; left:-99999px; top:0; width:210mm; height:297mm; background:#fff;}
+    .a4{
+      width:210mm; height:297mm; background:#fff;
+      box-sizing:border-box;
+      padding:12mm;
+      color:#000;
+      font-family:"Noto Sans JP", sans-serif;
+    }
+    .invTitle{
+      position:absolute;
+      top:12mm;
+      right:12mm;
+      font-size:18pt;
+      font-weight:900;
+      letter-spacing:2px;
+    }
+    .customer{
+      position:absolute;
+      top:22mm;
+      left:12mm;
+      font-size:14pt;
+      font-weight:700;
+      padding-bottom:2mm;
+      width:120mm;
+      border-bottom:1px solid #000;
+    }
+    .issuer{
+      position:absolute;
+      top:24mm;
+      right:12mm;
+      width:80mm;
+      text-align:right;
+      font-size:9pt;
+      line-height:1.35;
+      white-space:pre-wrap;
+    }
+    .dates{
+      position:absolute;
+      top:38mm;
+      left:12mm;
+      font-size:10pt;
+      line-height:1.4;
+      white-space:pre-wrap;
+    }
+    .table{
+      position:absolute;
+      top:52mm;
+      left:12mm;
+      right:12mm;
+      border:1px solid #000;
+      border-collapse:collapse;
+      font-size:10pt;
+      width:calc(210mm - 24mm);
+      table-layout:fixed;
+    }
+    .table th,.table td{
+      border:1px solid #000;
+      padding:2.2mm 2mm;
+      vertical-align:middle;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .table th{font-weight:900; background:#fff;}
+    .alignR{text-align:right}
+    .alignC{text-align:center}
+
+    .summary{
+      position:absolute;
+      top:78mm;
+      right:12mm;
+      width:70mm;
+      font-size:10pt;
+      line-height:1.6;
+    }
+    .summaryRow{
+      display:flex;
+      justify-content:space-between;
+      gap:6mm;
+    }
+    .summaryRow .k{font-weight:700}
+    .summaryRow .v{font-weight:900}
+    .summaryLine{
+      height:0;
+      border-top:1px solid #000;
+      margin:1mm 0 1mm 0;
+    }
+
+    .bankTitle{
+      position:absolute;
+      bottom:40mm;
+      left:12mm;
+      font-size:10pt;
+      font-weight:900;
+    }
+    .bankText{
+      position:absolute;
+      bottom:24mm;
+      left:12mm;
+      right:12mm;
+      font-size:9pt;
+      line-height:1.45;
+      white-space:pre-wrap;
+    }
+    .remarkTitle{
+      position:absolute;
+      bottom:18mm;
+      left:12mm;
+      font-size:10pt;
+      font-weight:900;
+    }
+    .remarkText{
+      position:absolute;
+      bottom:8mm;
+      left:12mm;
+      right:12mm;
+      font-size:9pt;
+      line-height:1.45;
+      white-space:pre-wrap;
+    }
   </style>
 
-  <!-- jsPDF (PDF生成) -->
+  <!-- PDF生成：HTMLをキャンバス化 → PDFへ貼り付け（日本語フォント問題ゼロ） -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
 
 <body>
   <div class="wrap">
-    <h1>請求書PWA（日本語フォント完全対応版）</h1>
+    <h1>請求書PWA（完全同一レイアウト / 日本語OK）</h1>
     <div class="small">
-      ・請求日/振込期限は「共通項目」で1回だけ設定（全請求先で同一）。<br>
-      ・「形式」は請求日の月から自動で <b>○月分</b> を表示します（編集不要）。<br>
-      ・振込期限はカレンダー（date）から選択できます。<br>
-      ・PDFは日本語文字化けしません（同梱フォントをPDFへ埋め込み）。
+      ・PDFは「画面の請求書をそのまま画像化してA4に貼る」方式なので、日本語が絶対に崩れません。<br>
+      ・初回はオンラインで開いてください（ライブラリCDN読み込み）。
     </div>
 
     <div class="bar">
@@ -76,60 +204,28 @@
     <div class="card">
       <div class="sectionTitle">共通：自社情報</div>
       <div class="grid">
-        <div class="row">
-          <div class="label">発行元名</div>
-          <input id="issuer_name" placeholder="例）VOUG" />
-        </div>
-        <div class="row">
-          <div class="label">住所</div>
-          <input id="issuer_addr" placeholder="例）札幌市西区…" />
-        </div>
+        <div class="row"><div class="label">発行元名</div><input id="issuer_name" /></div>
+        <div class="row"><div class="label">住所</div><input id="issuer_addr" /></div>
         <div class="two">
-          <div class="row">
-            <div class="label">TEL</div>
-            <input id="issuer_tel" placeholder="例）011-xxx-xxxx" />
-          </div>
-          <div class="row">
-            <div class="label">担当/連絡先</div>
-            <input id="issuer_person" placeholder="例）担当 畑野千春 090-xxxx-xxxx" />
-          </div>
+          <div class="row"><div class="label">TEL</div><input id="issuer_tel" /></div>
+          <div class="row"><div class="label">担当/連絡先</div><input id="issuer_person" /></div>
         </div>
-        <div class="row">
-          <div class="label">メール</div>
-          <input id="issuer_email" placeholder="例）xxx@example.com" />
-        </div>
+        <div class="row"><div class="label">メール</div><input id="issuer_email" /></div>
 
         <div class="hr"></div>
 
         <div class="sectionTitle">共通：請求日 / 振込期限</div>
         <div class="two">
-          <div class="row">
-            <div class="label">請求日</div>
-            <input id="common_issue_date" type="date" />
-          </div>
-          <div class="row">
-            <div class="label">振込期限</div>
-            <input id="common_due_date" type="date" />
-          </div>
+          <div class="row"><div class="label">請求日</div><input id="common_issue_date" type="date" /></div>
+          <div class="row"><div class="label">振込期限</div><input id="common_due_date" type="date" /></div>
         </div>
-        <div class="hint">※「形式」は請求日の月から自動表示（例：2月分）。</div>
+        <div class="hint">※ 形式は請求日の月から自動で「○月分」になります。</div>
 
         <div class="hr"></div>
 
         <div class="sectionTitle">共通：振込先</div>
-        <div class="row">
-          <div class="label">振込先（メイン）</div>
-          <input id="bank_main" placeholder="例）○○銀行 ○○支店 普通 1234567 口座名…" />
-        </div>
-        <div class="row">
-          <div class="label">予備口座</div>
-          <input id="bank_sub" placeholder="例）○○銀行 ○○支店 普通 7654321 口座名…" />
-        </div>
-      </div>
-
-      <div class="hint">
-        ※ 初回はオンラインで開いてください（jsPDFをCDNで読み込みます）。<br>
-        ※ 日本語フォントはこのアプリに同梱され、PDFへ埋め込まれます。
+        <div class="row"><div class="label">振込先（メイン）</div><input id="bank_main" /></div>
+        <div class="row"><div class="label">予備口座</div><input id="bank_sub" /></div>
       </div>
     </div>
 
@@ -142,23 +238,62 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- PDF化用のA4ステージ（画面外） -->
+  <div class="a4stage" aria-hidden="true">
+    <div id="a4" class="a4">
+      <div class="invTitle">請 求 書</div>
+      <div id="p_customer" class="customer"></div>
+      <div id="p_issuer" class="issuer"></div>
+      <div id="p_dates" class="dates"></div>
+
+      <table class="table">
+        <colgroup>
+          <col style="width:42%">
+          <col style="width:20%">
+          <col style="width:13%">
+          <col style="width:25%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>品名</th>
+            <th>形式</th>
+            <th class="alignC">数量</th>
+            <th class="alignR">単価</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="p_item_name"></td>
+            <td id="p_item_form"></td>
+            <td id="p_qty" class="alignC"></td>
+            <td id="p_unit" class="alignR"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="summary">
+        <div class="summaryRow"><span class="k">小計</span><span id="p_sub" class="v"></span></div>
+        <div class="summaryRow"><span class="k">消費税</span><span id="p_tax" class="v"></span></div>
+        <div class="summaryLine"></div>
+        <div class="summaryRow"><span class="k">合計</span><span id="p_total" class="v"></span></div>
+      </div>
+
+      <div class="bankTitle">振込先</div>
+      <div id="p_bank" class="bankText"></div>
+
+      <div class="remarkTitle">備考</div>
+      <div id="p_remark" class="remarkText"></div>
+    </div>
+  </div>
+
 <script>
-  // ===== PWA =====
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(()=>{});
-    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
   }
 
-  const $ = (sel) => document.querySelector(sel);
+  const $ = (s)=>document.querySelector(s);
   const invoicesEl = $('#invoices');
-  const STORAGE_KEY = 'invoice_pwa_jpfont_v1';
-
-  const FONT_FILE = './NotoSansCJKJP-Regular.ttf';
-  const FONT_VFS_NAME = 'NotoSansCJKJP-Regular.ttf';
-  const FONT_FAMILY = 'NotoSansCJKJP';
-  let __fontReady = false;
-  let __fontLoading = null;
+  const STORAGE_KEY = 'invoice_pwa_htmlpdf_v1';
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -166,106 +301,71 @@
     issuer_tel: '011-614-5286',
     issuer_person: '担当 畑野千春 090-7842-8798',
     issuer_email: 'voug286@gmeil.com',
-    common_issue_date: '', // YYYY-MM-DD
-    common_due_date: '',   // YYYY-MM-DD
+    common_issue_date: '',
+    common_due_date: '',
     bank_main: '旭川信用金庫 本店 普通口座 1472165 口座名 有限会社ニューアロー',
     bank_sub: '楽天銀行 チェロ支店（214） 普通口座 1310243 口座名 ハタノチハル'
   };
 
   function todayISO(){
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,'0');
-    const day = String(d.getDate()).padStart(2,'0');
+    const d=new Date();
+    const y=d.getFullYear();
+    const m=String(d.getMonth()+1).padStart(2,'0');
+    const day=String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;
   }
-
-  function monthLabelFromISO(iso){ // YYYY-MM-DD -> "2月分"
+  function jpDate(iso){ return (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) ? iso.replaceAll('-','.') : ''; }
+  function monthLabel(iso){
     if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
-    const m = Number(iso.slice(5,7));
-    if (!m) return '';
-    return `${m}月分`;
+    const m = Number(iso.slice(5,7)); return m ? `${m}月分` : '';
   }
-
-  function jpDateFromISO(iso){ // YYYY-MM-DD -> "YYYY.MM.DD"
-    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
-    return iso.replaceAll('-', '.');
+  function fmtYen(n){ return Number(n||0).toLocaleString('ja-JP'); }
+  function calc(inv){
+    const qty=Number(inv.qty||0), unit=Number(inv.unit_price||0), rate=Number(inv.tax_rate??0.10);
+    const sub=qty*unit; const tax=Math.round(sub*rate); const total=sub+tax;
+    return {sub,tax,total};
   }
-
-  function escapeHtml(s){
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    })[c]);
-  }
-
   function toast(msg){
-    const el = $('#toast');
-    el.textContent = msg;
-    el.classList.add('show');
+    const el=$('#toast'); el.textContent=msg; el.classList.add('show');
     clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(()=>el.classList.remove('show'), 1800);
+    window.__toastTimer=setTimeout(()=>el.classList.remove('show'),1800);
   }
 
   function defaultInvoice(){
-    return {
-      customer: '',
-      item_name: '',
-      qty: 1,
-      unit_price: 0,
-      tax_rate: 0.10,
-      remarks: ''
-    };
+    return { customer:'', item_name:'', qty:1, unit_price:0, tax_rate:0.10, remarks:'' };
   }
 
-  function calc(inv){
-    const qty = Number(inv.qty || 0);
-    const unit = Number(inv.unit_price || 0);
-    const rate = Number(inv.tax_rate ?? 0.10);
-    const sub = qty * unit;
-    const tax = Math.round(sub * rate);
-    const total = sub + tax;
-    return {sub, tax, total};
-  }
-  function fmtYen(n){ return Number(n||0).toLocaleString('ja-JP'); }
-
-  let state = {
-    common: {...DEFAULT_COMMON},
-    invoices: [ defaultInvoice() ]
-  };
-
-  // 初期：請求日は今日をセット
+  let state = { common:{...DEFAULT_COMMON}, invoices:[defaultInvoice()] };
   state.common.common_issue_date = todayISO();
 
   function readCommonFromUI(){
-    state.common.issuer_name = $('#issuer_name').value.trim();
-    state.common.issuer_addr = $('#issuer_addr').value.trim();
-    state.common.issuer_tel = $('#issuer_tel').value.trim();
-    state.common.issuer_person = $('#issuer_person').value.trim();
-    state.common.issuer_email = $('#issuer_email').value.trim();
-    state.common.common_issue_date = $('#common_issue_date').value.trim();
-    state.common.common_due_date = $('#common_due_date').value.trim();
-    state.common.bank_main = $('#bank_main').value.trim();
-    state.common.bank_sub = $('#bank_sub').value.trim();
+    state.common.issuer_name=$('#issuer_name').value.trim();
+    state.common.issuer_addr=$('#issuer_addr').value.trim();
+    state.common.issuer_tel=$('#issuer_tel').value.trim();
+    state.common.issuer_person=$('#issuer_person').value.trim();
+    state.common.issuer_email=$('#issuer_email').value.trim();
+    state.common.common_issue_date=$('#common_issue_date').value.trim();
+    state.common.common_due_date=$('#common_due_date').value.trim();
+    state.common.bank_main=$('#bank_main').value.trim();
+    state.common.bank_sub=$('#bank_sub').value.trim();
   }
-
   function writeCommonToUI(){
-    $('#issuer_name').value = state.common.issuer_name ?? '';
-    $('#issuer_addr').value = state.common.issuer_addr ?? '';
-    $('#issuer_tel').value = state.common.issuer_tel ?? '';
-    $('#issuer_person').value = state.common.issuer_person ?? '';
-    $('#issuer_email').value = state.common.issuer_email ?? '';
-    $('#common_issue_date').value = state.common.common_issue_date ?? '';
-    $('#common_due_date').value = state.common.common_due_date ?? '';
-    $('#bank_main').value = state.common.bank_main ?? '';
-    $('#bank_sub').value = state.common.bank_sub ?? '';
+    $('#issuer_name').value=state.common.issuer_name||'';
+    $('#issuer_addr').value=state.common.issuer_addr||'';
+    $('#issuer_tel').value=state.common.issuer_tel||'';
+    $('#issuer_person').value=state.common.issuer_person||'';
+    $('#issuer_email').value=state.common.issuer_email||'';
+    $('#common_issue_date').value=state.common.common_issue_date||'';
+    $('#common_due_date').value=state.common.common_due_date||'';
+    $('#bank_main').value=state.common.bank_main||'';
+    $('#bank_sub').value=state.common.bank_sub||'';
   }
 
   function createCard(inv, idx){
-    const c = document.createElement('div');
-    c.className = 'card';
-    c.dataset.idx = String(idx);
-    const {sub, tax, total} = calc(inv);
-    const formLabel = monthLabelFromISO(state.common.common_issue_date);
+    const c=document.createElement('div');
+    c.className='card'; c.dataset.idx=String(idx);
+    const {sub,tax,total}=calc(inv);
+    const form=monthLabel(state.common.common_issue_date);
 
     c.innerHTML = `
       <div class="invoiceHeader">
@@ -280,39 +380,20 @@
       </div>
 
       <div class="grid" style="margin-top:10px;">
-        <div class="row">
-          <div class="label">宛名（請求先）</div>
-          <input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）〇〇 様" />
-        </div>
+        <div class="row"><div class="label">宛名（請求先）</div><input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）のみくい処 旨や 様" /></div>
 
         <div class="hr"></div>
         <div class="sectionTitle">明細（1行）</div>
 
-        <div class="row">
-          <div class="label">品名</div>
-          <input class="item_name" value="${escapeHtml(inv.item_name)}" placeholder="例）D-1X" />
-        </div>
-
-        <div class="row">
-          <div class="label">形式</div>
-          <input class="item_form" value="${escapeHtml(formLabel)}" readonly />
-        </div>
+        <div class="row"><div class="label">品名</div><input class="item_name" value="${escapeHtml(inv.item_name)}" placeholder="例）D-1X" /></div>
+        <div class="row"><div class="label">形式</div><input class="item_form" value="${escapeHtml(form)}" readonly /></div>
 
         <div class="two">
-          <div class="row">
-            <div class="label">数量</div>
-            <input class="qty" inputmode="numeric" value="${escapeHtml(inv.qty)}" />
-          </div>
-          <div class="row">
-            <div class="label">単価（円）</div>
-            <input class="unit_price" inputmode="numeric" value="${escapeHtml(inv.unit_price)}" />
-          </div>
+          <div class="row"><div class="label">数量</div><input class="qty" inputmode="numeric" value="${escapeHtml(inv.qty)}" /></div>
+          <div class="row"><div class="label">単価（円）</div><input class="unit_price" inputmode="numeric" value="${escapeHtml(inv.unit_price)}" /></div>
         </div>
 
-        <div class="row">
-          <div class="label">税率</div>
-          <input class="tax_rate" inputmode="decimal" value="${escapeHtml(inv.tax_rate)}" placeholder="0.10" />
-        </div>
+        <div class="row"><div class="label">税率</div><input class="tax_rate" inputmode="decimal" value="${escapeHtml(inv.tax_rate)}" placeholder="0.10" /></div>
 
         <div class="moneyBox">
           <div class="m"><div class="t">小計</div><div class="v">¥${fmtYen(sub)}</div></div>
@@ -320,22 +401,18 @@
           <div class="m"><div class="t">合計</div><div class="v">¥${fmtYen(total)}</div></div>
         </div>
 
-        <div class="row">
-          <div class="label">備考</div>
-          <textarea class="remarks" placeholder="自由記載">${escapeHtml(inv.remarks)}</textarea>
-        </div>
+        <div class="row"><div class="label">備考</div><textarea class="remarks" placeholder="自由記載">${escapeHtml(inv.remarks)}</textarea></div>
       </div>
     `;
 
-    const bind = (cls, key, parser = (v)=>v) => {
-      const el = c.querySelector(cls);
-      el.addEventListener('input', () => {
-        const i = Number(c.dataset.idx);
-        state.invoices[i][key] = parser(el.value);
-        refreshCardMoney(c, state.invoices[i]);
+    const bind = (sel,key,parser=(v)=>v)=>{
+      const el=c.querySelector(sel);
+      el.addEventListener('input',()=>{
+        const i=Number(c.dataset.idx);
+        state.invoices[i][key]=parser(el.value);
+        refreshMoney(c,state.invoices[i]);
       });
     };
-
     bind('.customer','customer',(v)=>v);
     bind('.item_name','item_name',(v)=>v);
     bind('.qty','qty',(v)=>Number(v||0));
@@ -343,44 +420,38 @@
     bind('.tax_rate','tax_rate',(v)=>Number(v||0));
     bind('.remarks','remarks',(v)=>v);
 
-    c.querySelector('.delBtn').addEventListener('click', () => {
-      const i = Number(c.dataset.idx);
+    c.querySelector('.delBtn').addEventListener('click',()=>{
+      const i=Number(c.dataset.idx);
       state.invoices.splice(i,1);
-      if (state.invoices.length === 0) state.invoices.push(defaultInvoice());
-      render();
-      toast('削除しました');
+      if(state.invoices.length===0) state.invoices.push(defaultInvoice());
+      render(); toast('削除しました');
     });
 
-    c.querySelector('.pdfBtn').addEventListener('click', async () => {
+    c.querySelector('.pdfBtn').addEventListener('click',async()=>{
       readCommonFromUI();
-      const i = Number(c.dataset.idx);
+      const i=Number(c.dataset.idx);
       await generatePdf([state.invoices[i]]);
     });
 
     return c;
   }
 
-  function refreshCardMoney(cardEl, inv){
-    const {sub,tax,total} = calc(inv);
-    const v = cardEl.querySelectorAll('.moneyBox .v');
-    if (v && v.length === 3){
-      v[0].textContent = `¥${fmtYen(sub)}`;
-      v[1].textContent = `¥${fmtYen(tax)}`;
-      v[2].textContent = `¥${fmtYen(total)}`;
-    }
+  function escapeHtml(s){
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
   }
-
+  function refreshMoney(card,inv){
+    const {sub,tax,total}=calc(inv);
+    const v=card.querySelectorAll('.moneyBox .v');
+    if(v.length===3){ v[0].textContent=`¥${fmtYen(sub)}`; v[1].textContent=`¥${fmtYen(tax)}`; v[2].textContent=`¥${fmtYen(total)}`; }
+  }
   function render(){
-    invoicesEl.innerHTML = '';
-    state.invoices.forEach((inv, idx) => {
-      invoicesEl.appendChild(createCard(inv, idx));
-    });
+    invoicesEl.innerHTML='';
+    state.invoices.forEach((inv,idx)=>invoicesEl.appendChild(createCard(inv,idx)));
   }
-
   function updateAllFormLabels(){
-    document.querySelectorAll('.item_form').forEach(el => {
-      el.value = monthLabelFromISO(state.common.common_issue_date);
-    });
+    document.querySelectorAll('.item_form').forEach(el=>el.value=monthLabel(state.common.common_issue_date));
   }
 
   function save(){
@@ -388,190 +459,90 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     toast('保存しました');
   }
-
   function load(){
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw){ toast('保存データがありません'); return; }
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw){ toast('保存データがありません'); return; }
     try{
-      const obj = JSON.parse(raw);
-      if (obj && obj.common && Array.isArray(obj.invoices)){
-        state = obj;
-        if (!state.common.common_issue_date) state.common.common_issue_date = todayISO();
-        writeCommonToUI();
-        render();
-        toast('読み込みました');
-      }else{
-        toast('保存データ形式が不正です');
-      }
-    }catch(e){
-      toast('読み込みに失敗しました');
+      const obj=JSON.parse(raw);
+      if(obj && obj.common && Array.isArray(obj.invoices)){
+        state=obj;
+        if(!state.common.common_issue_date) state.common.common_issue_date=todayISO();
+        writeCommonToUI(); render(); toast('読み込みました');
+      }else toast('保存データ形式が不正です');
+    }catch(e){ toast('読み込みに失敗しました'); }
+  }
+  function clearSaved(){ localStorage.removeItem(STORAGE_KEY); toast('保存を消去しました'); }
+
+  // ===== PDF生成（A4 / 完全同一レイアウト）=====
+  async function renderA4(inv){
+    const common=state.common;
+    const form=monthLabel(common.common_issue_date);
+    const issue=jpDate(common.common_issue_date);
+    const due=jpDate(common.common_due_date);
+
+    // 文字（最初のPDFの見え方に合わせて整形）
+    $('#p_customer').textContent = inv.customer || '（宛名未設定）';
+    $('#p_issuer').textContent =
+      `${common.issuer_name || ''}\n${common.issuer_addr || ''}\n` +
+      `${common.issuer_tel ? 'TEL ' + common.issuer_tel : ''}\n` +
+      `${common.issuer_person || ''}\n${common.issuer_email || ''}`.trim();
+
+    let dateLines = '';
+    if (issue) dateLines += `請求日：${issue}\n`;
+    if (due) dateLines += `振込期限：${due}`;
+    $('#p_dates').textContent = dateLines.trim();
+
+    $('#p_item_name').textContent = inv.item_name || '';
+    $('#p_item_form').textContent = form || '';
+    $('#p_qty').textContent = String(inv.qty ?? '');
+    $('#p_unit').textContent = `${fmtYen(inv.unit_price || 0)}円`;
+
+    const {sub,tax,total}=calc(inv);
+    $('#p_sub').textContent = `¥${fmtYen(sub)}`;
+    $('#p_tax').textContent = `¥${fmtYen(tax)}`;
+    $('#p_total').textContent = `¥${fmtYen(total)}`;
+
+    const bank = [common.bank_main, common.bank_sub].filter(Boolean).join('\n');
+    $('#p_bank').textContent = bank;
+
+    $('#p_remark').textContent = (inv.remarks || '').trim();
+
+    // フォント読み込み待ち（Google Fonts）
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch(_){}
     }
   }
 
-  function clearSaved(){
-    localStorage.removeItem(STORAGE_KEY);
-    toast('保存を消去しました');
+  async function a4ToCanvas(){
+    const a4 = document.getElementById('a4');
+    // scale を上げると印刷が綺麗（重くなるので2で妥協）
+    return await html2canvas(a4, {
+      backgroundColor:'#ffffff',
+      scale: 2,
+      useCORS: true
+    });
   }
 
-  // ===== フォント埋め込み =====
-  function arrayBufferToBase64(buffer){
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000;
-    let binary = '';
-    for (let i=0; i<bytes.length; i+=chunkSize){
-      const chunk = bytes.subarray(i, i+chunkSize);
-      binary += String.fromCharCode.apply(null, chunk);
-    }
-    return btoa(binary);
-  }
-
-  async function ensureJapaneseFont(doc){
-    if (__fontReady) return;
-    if (__fontLoading) return __fontLoading;
-
-    __fontLoading = (async () => {
-      const res = await fetch(FONT_FILE);
-      if (!res.ok) throw new Error('font fetch failed');
-      const buf = await res.arrayBuffer();
-      const b64 = arrayBufferToBase64(buf);
-      doc.addFileToVFS(FONT_VFS_NAME, b64);
-      doc.addFont(FONT_VFS_NAME, FONT_FAMILY, 'normal');
-      __fontReady = true;
-    })();
-
-    return __fontLoading;
-  }
-
-  // ===== PDF生成（A4, 1請求先=1ページ）=====
   async function generatePdf(invoices){
     const { jsPDF } = window.jspdf || {};
-    if (!jsPDF){
-      alert('PDFライブラリ(jsPDF)が読み込めていません。最初はオンラインで開いてください。');
+    if(!jsPDF || !window.html2canvas){
+      alert('PDFライブラリが読み込めていません。最初はオンラインで開いてください。');
       return;
     }
+    const doc = new jsPDF({unit:'mm', format:'a4'});
 
-    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    for(let i=0;i<invoices.length;i++){
+      if(i>0) doc.addPage();
 
-    try{
-      toast('フォント準備中…');
-      await ensureJapaneseFont(doc);
-    }catch(e){
-      alert('日本語フォントの読み込みに失敗しました。ファイル配置を確認してください（NotoSansCJKJP-Regular.ttf）。');
-      return;
+      toast(`PDF生成中… ${i+1}/${invoices.length}`);
+      await renderA4(invoices[i]);
+
+      const canvas = await a4ToCanvas();
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+      // A4にぴったり貼る
+      doc.addImage(imgData, 'JPEG', 0, 0, 210, 297);
     }
-
-    // ここから日本語フォントを使用
-    doc.setFont(FONT_FAMILY, 'normal');
-
-    const margin = 12;
-    const pageW = 210;
-    const pageH = 297;
-
-    const common = state.common;
-    const issueDateJP = jpDateFromISO(common.common_issue_date || '');
-    const dueDateJP = jpDateFromISO(common.common_due_date || '');
-    const formLabel = monthLabelFromISO(common.common_issue_date || '');
-
-    invoices.forEach((inv, pageIndex) => {
-      if (pageIndex > 0) doc.addPage();
-
-      const {sub, tax, total} = calc(inv);
-
-      // タイトル
-      doc.setFontSize(18);
-      doc.text('請 求 書', pageW - margin - 40, margin + 6);
-
-      // 宛名
-      doc.setFontSize(14);
-      doc.text(`${inv.customer || '（宛名未設定）'}`, margin, margin + 18);
-      doc.setLineWidth(0.4);
-      doc.line(margin, margin + 20, pageW - margin, margin + 20);
-
-      // 発行元（右）
-      doc.setFontSize(9);
-      let y = margin + 16;
-      const rightX = pageW - margin;
-      const r = (t)=>{ if(t) { doc.text(t, rightX, y, {align:'right'}); y += 4.2; } };
-      r(common.issuer_name || '');
-      r(common.issuer_addr || '');
-      r(common.issuer_tel ? `TEL ${common.issuer_tel}` : '');
-      r(common.issuer_person || '');
-      r(common.issuer_email || '');
-
-      // 日付/期限（共通）
-      doc.setFontSize(10);
-      doc.text(`請求日：${issueDateJP || ''}`, margin, margin + 28);
-      if (dueDateJP) doc.text(`振込期限：${dueDateJP}`, margin, margin + 34);
-
-      // 明細テーブル
-      const tableTop = margin + 42;
-      const colX = [margin, 92, 120, 150, pageW - margin]; // 5列
-      const rowH = 9;
-
-      // ヘッダ枠
-      doc.setLineWidth(0.2);
-      doc.rect(margin, tableTop, pageW - margin*2, rowH);
-      doc.line(colX[1], tableTop, colX[1], tableTop + rowH);
-      doc.line(colX[2], tableTop, colX[2], tableTop + rowH);
-      doc.line(colX[3], tableTop, colX[3], tableTop + rowH);
-
-      doc.setFontSize(10);
-      doc.text('品名', colX[0] + 2, tableTop + 6);
-      doc.text('形式', colX[1] + 2, tableTop + 6);
-      doc.text('数量', colX[2] + 2, tableTop + 6);
-      doc.text('単価', colX[3] + 2, tableTop + 6);
-
-      // 1行目
-      const bodyTop = tableTop + rowH;
-      doc.rect(margin, bodyTop, pageW - margin*2, rowH);
-      doc.line(colX[1], bodyTop, colX[1], bodyTop + rowH);
-      doc.line(colX[2], bodyTop, colX[2], bodyTop + rowH);
-      doc.line(colX[3], bodyTop, colX[3], bodyTop + rowH);
-
-      doc.text(inv.item_name || '', colX[0] + 2, bodyTop + 6);
-      doc.text(formLabel || '', colX[1] + 2, bodyTop + 6);
-      doc.text(String(inv.qty ?? ''), colX[2] + 2, bodyTop + 6);
-      doc.text(`${fmtYen(inv.unit_price || 0)}円`, colX[4] - 2, bodyTop + 6, {align:'right'});
-
-      // 金額欄（右下）
-      const boxW = 70;
-      const boxX = pageW - margin - boxW;
-      let boxY = bodyTop + rowH + 8;
-
-      const line = (label, value) => {
-        doc.setFontSize(10);
-        doc.text(label, boxX, boxY);
-        doc.text(value, boxX + boxW, boxY, {align:'right'});
-        boxY += 7;
-      };
-
-      line('小計', `¥${fmtYen(sub)}`);
-      line('消費税', `¥${fmtYen(tax)}`);
-      doc.setLineWidth(0.2);
-      doc.line(boxX, boxY-4, boxX + boxW, boxY-4);
-      line('合計', `¥${fmtYen(total)}`);
-
-      // 振込先
-      let bY = pageH - margin - 44;
-      doc.setFontSize(10);
-      doc.text('振込先', margin, bY);
-      doc.setFontSize(9);
-      bY += 5;
-      if (common.bank_main) doc.text(common.bank_main, margin, bY);
-      bY += 5;
-      if (common.bank_sub) doc.text(common.bank_sub, margin, bY);
-
-      // 備考
-      let rmY = pageH - margin - 22;
-      doc.setFontSize(10);
-      doc.text('備考', margin, rmY);
-      doc.setFontSize(9);
-      const remarks = (inv.remarks || '').trim();
-      if (remarks){
-        const lines = doc.splitTextToSize(remarks, pageW - margin*2);
-        doc.text(lines, margin, rmY + 5);
-      }
-    });
 
     const filename = `invoice_${new Date().toISOString().slice(0,10)}.pdf`;
     doc.save(filename);
@@ -579,29 +550,16 @@
   }
 
   // ===== イベント =====
-  $('#addBtn').addEventListener('click', () => {
-    state.invoices.push(defaultInvoice());
-    render();
-    toast('請求先カードを追加しました');
-  });
-  $('#saveBtn').addEventListener('click', save);
-  $('#loadBtn').addEventListener('click', load);
-  $('#clearBtn').addEventListener('click', clearSaved);
-  $('#pdfAllBtn').addEventListener('click', async () => {
-    readCommonFromUI();
-    await generatePdf(state.invoices);
-  });
+  $('#addBtn').addEventListener('click',()=>{ state.invoices.push(defaultInvoice()); render(); toast('請求先カードを追加しました'); });
+  $('#saveBtn').addEventListener('click',save);
+  $('#loadBtn').addEventListener('click',load);
+  $('#clearBtn').addEventListener('click',clearSaved);
+  $('#pdfAllBtn').addEventListener('click',async()=>{ readCommonFromUI(); await generatePdf(state.invoices); });
 
-  // 共通欄：変更は即 state へ反映（PDF/形式へ反映）
   ['issuer_name','issuer_addr','issuer_tel','issuer_person','issuer_email','bank_main','bank_sub']
-    .forEach(id => $('#'+id).addEventListener('input', () => readCommonFromUI()));
-
-  // 請求日変更 → 形式（○月分）を全カードに反映
-  $('#common_issue_date').addEventListener('change', () => {
-    readCommonFromUI();
-    updateAllFormLabels();
-  });
-  $('#common_due_date').addEventListener('change', () => readCommonFromUI());
+    .forEach(id => $('#'+id).addEventListener('input',()=>readCommonFromUI()));
+  $('#common_issue_date').addEventListener('change',()=>{ readCommonFromUI(); updateAllFormLabels(); });
+  $('#common_due_date').addEventListener('change',()=>readCommonFromUI());
 
   // 初期表示
   writeCommonToUI();

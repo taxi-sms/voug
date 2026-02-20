@@ -1,10 +1,9 @@
-const CACHE_NAME = 'invoice-pwa-jpfont-v1';
+const CACHE_NAME = 'invoice-pwa-htmlpdf-v1';
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './offline.html',
-  './NotoSansCJKJP-Regular.ttf'
+  './offline.html'
 ];
 
 self.addEventListener('install', (event) => {
@@ -26,7 +25,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // HTMLはネット優先（更新を拾う）→ 失敗時にキャッシュ/オフライン
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
@@ -42,7 +40,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // それ以外はキャッシュ優先
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
