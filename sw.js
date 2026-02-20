@@ -1,9 +1,10 @@
-const CACHE_NAME = 'invoice-pwa-v4';
+const CACHE_NAME = 'invoice-pwa-jpfont-v1';
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './offline.html'
+  './offline.html',
+  './NotoSansCJKJP-Regular.ttf'
 ];
 
 self.addEventListener('install', (event) => {

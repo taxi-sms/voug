@@ -58,12 +58,12 @@
 
 <body>
   <div class="wrap">
-    <h1>請求書PWA（請求先を縦に追加 → A4 PDF）</h1>
+    <h1>請求書PWA（日本語フォント完全対応版）</h1>
     <div class="small">
       ・請求日/振込期限は「共通項目」で1回だけ設定（全請求先で同一）。<br>
       ・「形式」は請求日の月から自動で <b>○月分</b> を表示します（編集不要）。<br>
       ・振込期限はカレンダー（date）から選択できます。<br>
-      ・「PDFをまとめて作成」で、請求先ごとに1ページのA4 PDFを作成します。
+      ・PDFは日本語文字化けしません（同梱フォントをPDFへ埋め込み）。
     </div>
 
     <div class="bar">
@@ -128,7 +128,8 @@
       </div>
 
       <div class="hint">
-        ※ PDF生成は「jsPDF」をCDNで読み込みます。初回はオンラインで開いてください。
+        ※ 初回はオンラインで開いてください（jsPDFをCDNで読み込みます）。<br>
+        ※ 日本語フォントはこのアプリに同梱され、PDFへ埋め込まれます。
       </div>
     </div>
 
@@ -136,11 +137,6 @@
 
     <div class="bar">
       <button id="pdfAllBtn" class="primary">PDFをまとめて作成（各請求先＝1ページ）</button>
-    </div>
-
-    <div class="small">
-      iPhone保存：PDF作成後「共有」→「“ファイル”に保存」が確実です。<br>
-      ※ iOSで「ファイルを直接開く」は挙動が不安定なので、GitHub Pages等で開くのが安定です。
     </div>
   </div>
 
@@ -156,7 +152,13 @@
 
   const $ = (sel) => document.querySelector(sel);
   const invoicesEl = $('#invoices');
-  const STORAGE_KEY = 'invoice_pwa_v4';
+  const STORAGE_KEY = 'invoice_pwa_jpfont_v1';
+
+  const FONT_FILE = './NotoSansCJKJP-Regular.ttf';
+  const FONT_VFS_NAME = 'NotoSansCJKJP-Regular.ttf';
+  const FONT_FAMILY = 'NotoSansCJKJP';
+  let __fontReady = false;
+  let __fontLoading = null;
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -376,7 +378,6 @@
   }
 
   function updateAllFormLabels(){
-    // 請求日の月変更に合わせて、表示だけ更新
     document.querySelectorAll('.item_form').forEach(el => {
       el.value = monthLabelFromISO(state.common.common_issue_date);
     });
@@ -412,6 +413,35 @@
     toast('保存を消去しました');
   }
 
+  // ===== フォント埋め込み =====
+  function arrayBufferToBase64(buffer){
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+    for (let i=0; i<bytes.length; i+=chunkSize){
+      const chunk = bytes.subarray(i, i+chunkSize);
+      binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
+  }
+
+  async function ensureJapaneseFont(doc){
+    if (__fontReady) return;
+    if (__fontLoading) return __fontLoading;
+
+    __fontLoading = (async () => {
+      const res = await fetch(FONT_FILE);
+      if (!res.ok) throw new Error('font fetch failed');
+      const buf = await res.arrayBuffer();
+      const b64 = arrayBufferToBase64(buf);
+      doc.addFileToVFS(FONT_VFS_NAME, b64);
+      doc.addFont(FONT_VFS_NAME, FONT_FAMILY, 'normal');
+      __fontReady = true;
+    })();
+
+    return __fontLoading;
+  }
+
   // ===== PDF生成（A4, 1請求先=1ページ）=====
   async function generatePdf(invoices){
     const { jsPDF } = window.jspdf || {};
@@ -421,6 +451,18 @@
     }
 
     const doc = new jsPDF({ unit:'mm', format:'a4' });
+
+    try{
+      toast('フォント準備中…');
+      await ensureJapaneseFont(doc);
+    }catch(e){
+      alert('日本語フォントの読み込みに失敗しました。ファイル配置を確認してください（NotoSansCJKJP-Regular.ttf）。');
+      return;
+    }
+
+    // ここから日本語フォントを使用
+    doc.setFont(FONT_FAMILY, 'normal');
+
     const margin = 12;
     const pageW = 210;
     const pageH = 297;
@@ -436,7 +478,6 @@
       const {sub, tax, total} = calc(inv);
 
       // タイトル
-      doc.setFont('helvetica','bold');
       doc.setFontSize(18);
       doc.text('請 求 書', pageW - margin - 40, margin + 6);
 
@@ -448,7 +489,6 @@
 
       // 発行元（右）
       doc.setFontSize(9);
-      doc.setFont('helvetica','normal');
       let y = margin + 16;
       const rightX = pageW - margin;
       const r = (t)=>{ if(t) { doc.text(t, rightX, y, {align:'right'}); y += 4.2; } };
@@ -475,7 +515,6 @@
       doc.line(colX[2], tableTop, colX[2], tableTop + rowH);
       doc.line(colX[3], tableTop, colX[3], tableTop + rowH);
 
-      doc.setFont('helvetica','bold');
       doc.setFontSize(10);
       doc.text('品名', colX[0] + 2, tableTop + 6);
       doc.text('形式', colX[1] + 2, tableTop + 6);
@@ -484,7 +523,6 @@
 
       // 1行目
       const bodyTop = tableTop + rowH;
-      doc.setFont('helvetica','normal');
       doc.rect(margin, bodyTop, pageW - margin*2, rowH);
       doc.line(colX[1], bodyTop, colX[1], bodyTop + rowH);
       doc.line(colX[2], bodyTop, colX[2], bodyTop + rowH);
@@ -501,10 +539,8 @@
       let boxY = bodyTop + rowH + 8;
 
       const line = (label, value) => {
-        doc.setFont('helvetica','normal');
         doc.setFontSize(10);
         doc.text(label, boxX, boxY);
-        doc.setFont('helvetica','bold');
         doc.text(value, boxX + boxW, boxY, {align:'right'});
         boxY += 7;
       };
@@ -517,10 +553,8 @@
 
       // 振込先
       let bY = pageH - margin - 44;
-      doc.setFont('helvetica','bold');
       doc.setFontSize(10);
       doc.text('振込先', margin, bY);
-      doc.setFont('helvetica','normal');
       doc.setFontSize(9);
       bY += 5;
       if (common.bank_main) doc.text(common.bank_main, margin, bY);
@@ -529,10 +563,8 @@
 
       // 備考
       let rmY = pageH - margin - 22;
-      doc.setFont('helvetica','bold');
       doc.setFontSize(10);
       doc.text('備考', margin, rmY);
-      doc.setFont('helvetica','normal');
       doc.setFontSize(9);
       const remarks = (inv.remarks || '').trim();
       if (remarks){
@@ -543,7 +575,7 @@
 
     const filename = `invoice_${new Date().toISOString().slice(0,10)}.pdf`;
     doc.save(filename);
-    toast('PDFを作成しました（保存/共有してください）');
+    toast('PDFを作成しました');
   }
 
   // ===== イベント =====
