@@ -4,18 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>請求書PWA</title>
-  <meta name="theme-color" content="#111" />
+  <meta name="theme-color" content="#111111" />
   <link rel="manifest" href="manifest.json" />
   <style>
     :root{ --bg:#fff; --text:#111; --muted:#666; --border:#111; --card:#f6f6f6; }
     html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;}
-    .wrap{max-width:920px;margin:0 auto;padding:14px;}
-    h1{font-size:18px;margin:0 0 12px;}
+    .wrap{max-width:980px;margin:0 auto;padding:14px;}
+    h1{font-size:18px;margin:0 0 10px;}
+    .small{font-size:12px;color:var(--muted);line-height:1.55;}
     .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
-    button{border:2px solid var(--border);background:#fff;padding:10px 12px;font-weight:900;border-radius:10px;}
+    button{border:2px solid var(--border);background:#fff;padding:10px 12px;font-weight:900;border-radius:12px;cursor:pointer}
     button.primary{background:#111;color:#fff;}
-    .small{font-size:12px;color:var(--muted);line-height:1.5;}
-    .card{border:2px solid var(--border);border-radius:14px;padding:12px;background:#fff;margin:10px 0;}
+    button.danger{border-color:#c00;color:#c00}
+    .card{border:2px solid var(--border);border-radius:16px;padding:12px;background:#fff;margin:10px 0;}
     .sectionTitle{font-weight:900;margin:4px 0 10px;}
     .grid{display:grid;grid-template-columns:1fr;gap:10px;}
     .row{display:grid;grid-template-columns: 130px 1fr; gap:10px; align-items:center;}
@@ -23,19 +24,31 @@
     input,textarea{
       width:100%; box-sizing:border-box;
       border:2px solid var(--border);
-      border-radius:10px;
+      border-radius:12px;
       padding:10px 10px;
       font-size:16px;
       background:#fff;
     }
     textarea{min-height:70px;resize:vertical;}
-    .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
-    .invoiceHeader .left{min-width:220px}
     .pill{display:inline-block;border:2px solid var(--border);border-radius:999px;padding:4px 10px;font-weight:900;font-size:12px;background:var(--card)}
-    .danger{border-color:#c00;color:#c00}
-    .hr{height:1px;background:#ddd;margin:10px 0;}
+    .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     @media (max-width:720px){ .row{grid-template-columns:1fr;} .two{grid-template-columns:1fr;} }
+    .hr{height:1px;background:#ddd;margin:10px 0;}
+    .moneyBox{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .moneyBox .m{border:2px solid #ddd;border-radius:12px;padding:8px;background:#fafafa}
+    .moneyBox .t{font-size:11px;color:var(--muted);font-weight:900}
+    .moneyBox .v{font-size:16px;font-weight:900;margin-top:3px}
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom:18px; background:#111; color:#fff;
+      padding:10px 12px; border-radius:999px;
+      font-size:12px; font-weight:900;
+      opacity:0; pointer-events:none; transition:opacity .2s;
+      max-width:90vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .toast.show{opacity:1;}
+    .hint{font-size:12px;color:var(--muted);margin-top:8px}
   </style>
 
   <!-- jsPDF (PDF生成) -->
@@ -44,22 +57,22 @@
 
 <body>
   <div class="wrap">
-    <h1>請求書PWA（請求先ごとに追加 → A4 PDF出力）</h1>
+    <h1>請求書PWA（請求先を縦に追加 → A4 PDF）</h1>
     <div class="small">
-      ・「請求先カード」を追加して、縦に入力していくだけ。<br>
-      ・PDFはA4で自動作成→ダウンロード（iPhoneなら共有から「“ファイル”に保存」が確実）。<br>
-      ・このテンプレは、あなたの請求書にある項目（宛名/日付/振込先/品名/形式/数量/単価/消費税/小計/合計/備考など）に合わせています。:contentReference[oaicite:1]{index=1}
+      ・「＋ 請求先カードを追加」→ 各請求先の入力欄が縦に増えます。<br>
+      ・「PDFをまとめて作成」で、請求先ごとに1ページのA4 PDFが作れます。<br>
+      ・入力は端末内（localStorage）に保存できます。
     </div>
 
     <div class="bar">
       <button id="addBtn" class="primary">＋ 請求先カードを追加</button>
-      <button id="saveBtn">入力を保存（端末内）</button>
+      <button id="saveBtn">入力を保存</button>
       <button id="loadBtn">保存を読み込み</button>
       <button id="clearBtn" class="danger">保存を消去</button>
     </div>
 
     <div class="card">
-      <div class="sectionTitle">自社情報（共通）</div>
+      <div class="sectionTitle">共通：自社情報 / 振込先</div>
       <div class="grid">
         <div class="row">
           <div class="label">発行元名</div>
@@ -86,17 +99,17 @@
 
         <div class="hr"></div>
 
-        <div class="sectionTitle">振込先（共通）</div>
-        <div class="grid">
-          <div class="row">
-            <div class="label">振込先（メイン）</div>
-            <input id="bank_main" placeholder="例）旭川信用金庫 本店 普通口座 1472165 口座名 …" />
-          </div>
-          <div class="row">
-            <div class="label">予備口座</div>
-            <input id="bank_sub" placeholder="例）楽天銀行 チェロ支店(214) 普通口座 …" />
-          </div>
+        <div class="row">
+          <div class="label">振込先（メイン）</div>
+          <input id="bank_main" placeholder="例）○○銀行 ○○支店 普通 1234567 口座名…" />
         </div>
+        <div class="row">
+          <div class="label">予備口座</div>
+          <input id="bank_sub" placeholder="例）○○銀行 ○○支店 普通 7654321 口座名…" />
+        </div>
+      </div>
+      <div class="hint">
+        ※ PDF生成は「jsPDF」をCDNで読み込みます。初回はオンラインで開いてください。
       </div>
     </div>
 
@@ -107,19 +120,25 @@
     </div>
 
     <div class="small">
-      PWA化：iPhoneはSafariで開いて「共有」→「ホーム画面に追加」。AndroidはChromeで「アプリをインストール」。<br>
-      オフライン動作は、sw.js が読み込まれていれば一部キャッシュされます（初回はオンライン必須）。
+      PWA化：iPhoneはSafariの共有 →「ホーム画面に追加」。AndroidはChrome →「アプリをインストール」。<br>
+      iPhone保存：PDF作成後「共有」→「“ファイル”に保存」が確実です（ダウンロードフォルダが見つからない場合の対策）。
     </div>
   </div>
+
+  <div id="toast" class="toast"></div>
 
 <script>
   // ===== PWA =====
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
   }
 
   const $ = (sel) => document.querySelector(sel);
   const invoicesEl = $('#invoices');
+
+  const STORAGE_KEY = 'invoice_pwa_v1';
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -131,29 +150,40 @@
     bank_sub: '楽天銀行 チェロ支店（214） 普通口座 1310243 口座名 ハタノチハル'
   };
 
-  // あなたの請求書の例（D-1X / 2月分 / 1台 / 35,000 / 税3,500 / 合計38,500）:contentReference[oaicite:2]{index=2}
-  function defaultInvoice() {
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth()+1).padStart(2,'0');
-    const d = String(today.getDate()).padStart(2,'0');
+  function todayYMD(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}.${m}.${day}`;
+  }
 
+  function defaultInvoice(){
     return {
-      customer: 'のみくい処 旨や 様',
-      issue_date: `${y}.${m}.${d}`,
-      due_date: '（未設定）',
-      item_name: 'D-1X',
-      item_form: '2月分',
+      customer: '',
+      issue_date: todayYMD(),
+      due_date: '',
+      item_name: '',
+      item_form: '',
       qty: 1,
-      unit_price: 35000,
+      unit_price: 0,
       tax_rate: 0.10,
       remarks: ''
     };
   }
 
-  function fmtYen(n){
-    const num = Number(n || 0);
-    return num.toLocaleString('ja-JP');
+  function escapeHtml(s){
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
+
+  function toast(msg){
+    const el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(()=>el.classList.remove('show'), 1800);
   }
 
   function calc(inv){
@@ -165,19 +195,44 @@
     const total = sub + tax;
     return {sub, tax, total};
   }
+  function fmtYen(n){ return Number(n||0).toLocaleString('ja-JP'); }
+
+  let state = {
+    common: {...DEFAULT_COMMON},
+    invoices: [ defaultInvoice() ]
+  };
+
+  function readCommonFromUI(){
+    state.common.issuer_name = $('#issuer_name').value.trim();
+    state.common.issuer_addr = $('#issuer_addr').value.trim();
+    state.common.issuer_tel = $('#issuer_tel').value.trim();
+    state.common.issuer_person = $('#issuer_person').value.trim();
+    state.common.issuer_email = $('#issuer_email').value.trim();
+    state.common.bank_main = $('#bank_main').value.trim();
+    state.common.bank_sub = $('#bank_sub').value.trim();
+  }
+
+  function writeCommonToUI(){
+    $('#issuer_name').value = state.common.issuer_name ?? '';
+    $('#issuer_addr').value = state.common.issuer_addr ?? '';
+    $('#issuer_tel').value = state.common.issuer_tel ?? '';
+    $('#issuer_person').value = state.common.issuer_person ?? '';
+    $('#issuer_email').value = state.common.issuer_email ?? '';
+    $('#bank_main').value = state.common.bank_main ?? '';
+    $('#bank_sub').value = state.common.bank_sub ?? '';
+  }
 
   function createCard(inv, idx){
     const c = document.createElement('div');
     c.className = 'card';
     c.dataset.idx = String(idx);
-
-    const money = calc(inv);
+    const {sub, tax, total} = calc(inv);
 
     c.innerHTML = `
       <div class="invoiceHeader">
-        <div class="left">
+        <div>
           <div class="pill">請求先 #${idx+1}</div>
-          <div class="small" style="margin-top:6px;">このカード1枚＝PDF 1ページ</div>
+          <div class="small" style="margin-top:6px;">このカード = PDF 1ページ</div>
         </div>
         <div class="bar" style="margin:0;">
           <button class="pdfBtn primary">この請求先のPDF</button>
@@ -188,22 +243,22 @@
       <div class="grid" style="margin-top:10px;">
         <div class="row">
           <div class="label">宛名（請求先）</div>
-          <input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）◯◯ 様" />
+          <input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）〇〇 様" />
         </div>
 
         <div class="two">
           <div class="row">
             <div class="label">請求日</div>
-            <input class="issue_date" value="${escapeHtml(inv.issue_date)}" placeholder="例）2026.2.20" />
+            <input class="issue_date" value="${escapeHtml(inv.issue_date)}" placeholder="例）2026.02.21" />
           </div>
           <div class="row">
             <div class="label">振込期限</div>
-            <input class="due_date" value="${escapeHtml(inv.due_date)}" placeholder="例）2026.2.27" />
+            <input class="due_date" value="${escapeHtml(inv.due_date)}" placeholder="例）2026.02.28" />
           </div>
         </div>
 
         <div class="hr"></div>
-        <div class="sectionTitle">明細（1行の基本形）</div>
+        <div class="sectionTitle">明細（1行）</div>
 
         <div class="row">
           <div class="label">品名</div>
@@ -217,14 +272,271 @@
         <div class="two">
           <div class="row">
             <div class="label">数量</div>
-            <input class="qty" inputmode="numeric" value="${inv.qty}" />
+            <input class="qty" inputmode="numeric" value="${escapeHtml(inv.qty)}" />
           </div>
           <div class="row">
             <div class="label">単価（円）</div>
-            <input class="unit_price" inputmode="numeric" value="${inv.unit_price}" />
+            <input class="unit_price" inputmode="numeric" value="${escapeHtml(inv.unit_price)}" />
           </div>
         </div>
 
         <div class="row">
           <div class="label">税率</div>
-          <input class="tax_rate" inputmode="decimal
+          <input class="tax_rate" inputmode="decimal" value="${escapeHtml(inv.tax_rate)}" placeholder="0.10" />
+        </div>
+
+        <div class="moneyBox">
+          <div class="m"><div class="t">小計</div><div class="v">¥${fmtYen(sub)}</div></div>
+          <div class="m"><div class="t">消費税</div><div class="v">¥${fmtYen(tax)}</div></div>
+          <div class="m"><div class="t">合計</div><div class="v">¥${fmtYen(total)}</div></div>
+        </div>
+
+        <div class="row">
+          <div class="label">備考</div>
+          <textarea class="remarks" placeholder="自由記載">${escapeHtml(inv.remarks)}</textarea>
+        </div>
+      </div>
+    `;
+
+    const bind = (cls, key, parser = (v)=>v) => {
+      const el = c.querySelector(cls);
+      el.addEventListener('input', () => {
+        const i = Number(c.dataset.idx);
+        state.invoices[i][key] = parser(el.value);
+        // 金額表示更新
+        refreshCardMoney(c, state.invoices[i]);
+      });
+    };
+
+    bind('.customer','customer',(v)=>v);
+    bind('.issue_date','issue_date',(v)=>v);
+    bind('.due_date','due_date',(v)=>v);
+    bind('.item_name','item_name',(v)=>v);
+    bind('.item_form','item_form',(v)=>v);
+    bind('.qty','qty',(v)=>Number(v||0));
+    bind('.unit_price','unit_price',(v)=>Number(v||0));
+    bind('.tax_rate','tax_rate',(v)=>Number(v||0));
+    bind('.remarks','remarks',(v)=>v);
+
+    c.querySelector('.delBtn').addEventListener('click', () => {
+      const i = Number(c.dataset.idx);
+      state.invoices.splice(i,1);
+      if (state.invoices.length === 0) state.invoices.push(defaultInvoice());
+      render();
+      toast('削除しました');
+    });
+
+    c.querySelector('.pdfBtn').addEventListener('click', async () => {
+      readCommonFromUI();
+      const i = Number(c.dataset.idx);
+      await generatePdf([state.invoices[i]]);
+    });
+
+    return c;
+  }
+
+  function refreshCardMoney(cardEl, inv){
+    const {sub,tax,total} = calc(inv);
+    const v = cardEl.querySelectorAll('.moneyBox .v');
+    if (v && v.length === 3){
+      v[0].textContent = `¥${fmtYen(sub)}`;
+      v[1].textContent = `¥${fmtYen(tax)}`;
+      v[2].textContent = `¥${fmtYen(total)}`;
+    }
+  }
+
+  function render(){
+    invoicesEl.innerHTML = '';
+    state.invoices.forEach((inv, idx) => {
+      invoicesEl.appendChild(createCard(inv, idx));
+    });
+  }
+
+  function save(){
+    readCommonFromUI();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    toast('保存しました');
+  }
+
+  function load(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw){ toast('保存データがありません'); return; }
+    try{
+      const obj = JSON.parse(raw);
+      if (obj && obj.common && Array.isArray(obj.invoices)){
+        state = obj;
+        writeCommonToUI();
+        render();
+        toast('読み込みました');
+      }else{
+        toast('保存データ形式が不正です');
+      }
+    }catch(e){
+      toast('読み込みに失敗しました');
+    }
+  }
+
+  function clearSaved(){
+    localStorage.removeItem(STORAGE_KEY);
+    toast('保存を消去しました');
+  }
+
+  // ===== PDF生成（A4, 1請求先=1ページ）=====
+  async function generatePdf(invoices){
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF){
+      alert('PDFライブラリ(jsPDF)が読み込めていません。最初はオンラインで開いてください。');
+      return;
+    }
+
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const margin = 12;
+    const pageW = 210;
+    const pageH = 297;
+
+    const common = state.common;
+
+    invoices.forEach((inv, pageIndex) => {
+      if (pageIndex > 0) doc.addPage();
+
+      const {sub, tax, total} = calc(inv);
+
+      // タイトル
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(18);
+      doc.text('請 求 書', pageW - margin - 40, margin + 6);
+
+      // 宛名
+      doc.setFontSize(14);
+      doc.text(`${inv.customer || '（宛名未設定）'}`, margin, margin + 18);
+      doc.setLineWidth(0.4);
+      doc.line(margin, margin + 20, pageW - margin, margin + 20);
+
+      // 発行元（右）
+      doc.setFontSize(9);
+      doc.setFont('helvetica','normal');
+      let y = margin + 16;
+      const rightX = pageW - margin;
+      const r = (t)=>{ doc.text(t, rightX, y, {align:'right'}); y += 4.2; };
+      r(common.issuer_name || '');
+      r(common.issuer_addr || '');
+      r((common.issuer_tel ? `TEL ${common.issuer_tel}` : '').trim());
+      r(common.issuer_person || '');
+      r(common.issuer_email || '');
+
+      // 日付/期限
+      doc.setFontSize(10);
+      doc.text(`請求日：${inv.issue_date || ''}`, margin, margin + 28);
+      if (inv.due_date) doc.text(`振込期限：${inv.due_date}`, margin, margin + 34);
+
+      // 明細テーブル
+      const tableTop = margin + 42;
+      const colX = [margin, 92, 120, 150, pageW - margin]; // 5列
+      const rowH = 9;
+
+      // ヘッダ枠
+      doc.setLineWidth(0.2);
+      doc.rect(margin, tableTop, pageW - margin*2, rowH);
+      doc.line(colX[1], tableTop, colX[1], tableTop + rowH);
+      doc.line(colX[2], tableTop, colX[2], tableTop + rowH);
+      doc.line(colX[3], tableTop, colX[3], tableTop + rowH);
+
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(10);
+      doc.text('品名', colX[0] + 2, tableTop + 6);
+      doc.text('形式', colX[1] + 2, tableTop + 6);
+      doc.text('数量', colX[2] + 2, tableTop + 6);
+      doc.text('単価', colX[3] + 2, tableTop + 6);
+
+      // 1行目
+      const bodyTop = tableTop + rowH;
+      doc.setFont('helvetica','normal');
+      doc.rect(margin, bodyTop, pageW - margin*2, rowH);
+      doc.line(colX[1], bodyTop, colX[1], bodyTop + rowH);
+      doc.line(colX[2], bodyTop, colX[2], bodyTop + rowH);
+      doc.line(colX[3], bodyTop, colX[3], bodyTop + rowH);
+
+      doc.text(inv.item_name || '', colX[0] + 2, bodyTop + 6);
+      doc.text(inv.item_form || '', colX[1] + 2, bodyTop + 6);
+      doc.text(String(inv.qty ?? ''), colX[2] + 2, bodyTop + 6);
+      doc.text(`${fmtYen(inv.unit_price || 0)}円`, colX[4] - 2, bodyTop + 6, {align:'right'});
+
+      // 金額欄（右下）
+      const boxW = 70;
+      const boxX = pageW - margin - boxW;
+      let boxY = bodyTop + rowH + 8;
+
+      const line = (label, value) => {
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(10);
+        doc.text(label, boxX, boxY);
+        doc.setFont('helvetica','bold');
+        doc.text(value, boxX + boxW, boxY, {align:'right'});
+        boxY += 7;
+      };
+
+      line('小計', `¥${fmtYen(sub)}`);
+      line('消費税', `¥${fmtYen(tax)}`);
+      doc.setLineWidth(0.2);
+      doc.line(boxX, boxY-4, boxX + boxW, boxY-4);
+      line('合計', `¥${fmtYen(total)}`);
+
+      // 振込先
+      let bY = pageH - margin - 44;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(10);
+      doc.text('振込先', margin, bY);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(9);
+      bY += 5;
+      if (common.bank_main) doc.text(common.bank_main, margin, bY);
+      bY += 5;
+      if (common.bank_sub) doc.text(common.bank_sub, margin, bY);
+
+      // 備考
+      let rmY = pageH - margin - 22;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(10);
+      doc.text('備考', margin, rmY);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(9);
+      const remarks = (inv.remarks || '').trim();
+      if (remarks){
+        const lines = doc.splitTextToSize(remarks, pageW - margin*2);
+        doc.text(lines, margin, rmY + 5);
+      }
+    });
+
+    const filename = `invoice_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+    toast('PDFを作成しました（保存/共有してください）');
+  }
+
+  // ===== イベント =====
+  $('#addBtn').addEventListener('click', () => {
+    state.invoices.push(defaultInvoice());
+    render();
+    toast('請求先カードを追加しました');
+  });
+  $('#saveBtn').addEventListener('click', save);
+  $('#loadBtn').addEventListener('click', load);
+  $('#clearBtn').addEventListener('click', clearSaved);
+  $('#pdfAllBtn').addEventListener('click', async () => {
+    readCommonFromUI();
+    await generatePdf(state.invoices);
+  });
+
+  // 共通欄の変更は state へ即反映（保存しなくてもPDF反映）
+  ['issuer_name','issuer_addr','issuer_tel','issuer_person','issuer_email','bank_main','bank_sub']
+    .forEach(id => {
+      $('#'+id).addEventListener('input', () => {
+        readCommonFromUI();
+      });
+    });
+
+  // 初期表示
+  writeCommonToUI();
+  render();
+</script>
+</body>
+</html>
