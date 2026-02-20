@@ -14,7 +14,7 @@
 
   <style>
     :root{ --bg:#fff; --text:#111; --muted:#666; --border:#111; --card:#f6f6f6; }
-    html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;overflow-x:hidden;}
     .wrap{max-width:980px;margin:0 auto;padding:14px;}
     h1{font-size:18px;margin:0 0 10px;}
     .small{font-size:12px;color:var(--muted);line-height:1.55;}
@@ -59,8 +59,8 @@
     .hint{font-size:12px;color:var(--muted);margin-top:8px}
 
     /* ===== A4請求書（PDF化対象） ===== */
-    .a4stage{position:absolute; left:-99999px; top:0; width:210mm; height:297mm; background:#fff;}
-    .a4{
+    .a4stage{position:fixed; left:0; top:0; width:210mm; height:297mm; background:#fff; opacity:0; pointer-events:none; transform:translateX(-200vw); }
+    .a4{isolation:isolate; contain:layout paint;
       width:210mm; height:297mm; background:#fff;
       box-sizing:border-box;
       padding:12mm;
