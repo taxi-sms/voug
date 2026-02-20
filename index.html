@@ -310,6 +310,10 @@
     if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
     const m = Number(iso.slice(5,7)); return m ? `${m}月分` : '';
   }
+  function customerWithHonorific(name){
+    const base = String(name || '').trim().replace(/\s*様$/,'').trim();
+    return base ? `${base} 様` : '';
+  }
   function fmtYen(n){ return Number(n||0).toLocaleString('ja-JP'); }
   function calc(inv){
     const rate=Number(inv.tax_rate??0.10);
@@ -393,7 +397,7 @@
           <input class="item_form" value="${escapeHtml(form)}" readonly />
           <div class="two">
             <input class="qty" inputmode="numeric" value="${escapeHtml(item.qty)}" placeholder="数量" />
-            <input class="unit_price" inputmode="numeric" value="${escapeHtml(item.unit_price)}" placeholder="単価（円）" />
+            <input class="unit_price" inputmode="numeric" value="${escapeHtml(item.unit_price)}" placeholder="単価" />
           </div>
           <button class="delItemBtn danger" type="button">この商品を削除</button>
         </div>
@@ -440,7 +444,7 @@
         refreshMoney(c,state.invoices[i]);
       });
     };
-    bind('.customer','customer',(v)=>v);
+    bind('.customer','customer',(v)=>customerWithHonorific(v));
     bind('.tax_rate','tax_rate',(v)=>Number(v||0));
     bind('.remarks','remarks',(v)=>v);
 
@@ -541,7 +545,7 @@
     const due=jpDate(common.common_due_date);
 
     // 文字（最初のPDFの見え方に合わせて整形）
-    $('#p_customer').textContent = inv.customer || '（宛名未設定）';
+    $('#p_customer').textContent = customerWithHonorific(inv.customer) || '（宛名未設定）';
     $('#p_issuer').textContent =
       `${common.issuer_name || ''}\n${common.issuer_addr || ''}\n` +
       `${common.issuer_tel ? 'TEL ' + common.issuer_tel : ''}\n` +
@@ -563,35 +567,6 @@
     `).join('');
     body.innerHTML = rows || '<tr><td></td><td></td><td class="alignC"></td><td class="alignR"></td></tr>';
 
-    // 明細行数に応じて下部ブロックを自動配置（重なり防止）
-    const table = document.querySelector('#a4 .table');
-    const summary = $('#p_summary');
-    const bankTitle = $('#p_bank_title');
-    const bankText = $('#p_bank');
-    const remarkTitle = $('#p_remark_title');
-    const remarkText = $('#p_remark');
-    if (table && summary && bankTitle && bankText && remarkTitle && remarkText){
-      const px = (mm)=>Math.round(mm * 3.7795);
-      const tableBottom = table.offsetTop + table.offsetHeight;
-
-      summary.style.top = `${tableBottom + px(3)}px`;
-      summary.style.bottom = 'auto';
-
-      const summaryBottom = summary.offsetTop + summary.offsetHeight;
-      bankTitle.style.top = `${summaryBottom + px(3)}px`;
-      bankTitle.style.bottom = 'auto';
-
-      bankText.style.top = `${bankTitle.offsetTop + px(5)}px`;
-      bankText.style.bottom = 'auto';
-
-      const bankBottom = bankText.offsetTop + bankText.offsetHeight;
-      remarkTitle.style.top = `${bankBottom + px(3)}px`;
-      remarkTitle.style.bottom = 'auto';
-
-      remarkText.style.top = `${remarkTitle.offsetTop + px(5)}px`;
-      remarkText.style.bottom = 'auto';
-    }
-
     const {sub,tax,total}=calc(inv);
     $('#p_sub').textContent = `¥${fmtYen(sub)}`;
     $('#p_tax').textContent = `¥${fmtYen(tax)}`;
@@ -601,6 +576,49 @@
     $('#p_bank').textContent = bank;
 
     $('#p_remark').textContent = (inv.remarks || '').trim();
+
+    // 明細行数と各テキスト量に応じて下部ブロックを自動配置（重なり防止）
+    const table = document.querySelector('#a4 .table');
+    const summary = $('#p_summary');
+    const bankTitle = $('#p_bank_title');
+    const bankText = $('#p_bank');
+    const remarkTitle = $('#p_remark_title');
+    const remarkText = $('#p_remark');
+    if (table && summary && bankTitle && bankText && remarkTitle && remarkText){
+      const px = (mm)=>Math.round(mm * 3.7795);
+      const pageHeight = px(297);
+      const bottomPadding = px(8);
+      const gapS = px(3);
+      const gapL = px(5);
+      const baseSummaryTop = table.offsetTop + table.offsetHeight + gapS;
+
+      summary.style.top = `${baseSummaryTop}px`;
+      summary.style.bottom = 'auto';
+
+      bankTitle.style.top = `${summary.offsetTop + summary.offsetHeight + gapS}px`;
+      bankTitle.style.bottom = 'auto';
+
+      bankText.style.top = `${bankTitle.offsetTop + gapL}px`;
+      bankText.style.bottom = 'auto';
+
+      remarkTitle.style.top = `${bankText.offsetTop + bankText.offsetHeight + gapS}px`;
+      remarkTitle.style.bottom = 'auto';
+
+      remarkText.style.top = `${remarkTitle.offsetTop + gapL}px`;
+      remarkText.style.bottom = 'auto';
+
+      const overflow = (remarkText.offsetTop + remarkText.offsetHeight + bottomPadding) - pageHeight;
+      if (overflow > 0){
+        const minSummaryTop = baseSummaryTop;
+        const nextSummaryTop = Math.max(minSummaryTop, summary.offsetTop - overflow);
+        const shift = summary.offsetTop - nextSummaryTop;
+        summary.style.top = `${summary.offsetTop - shift}px`;
+        bankTitle.style.top = `${bankTitle.offsetTop - shift}px`;
+        bankText.style.top = `${bankText.offsetTop - shift}px`;
+        remarkTitle.style.top = `${remarkTitle.offsetTop - shift}px`;
+        remarkText.style.top = `${remarkText.offsetTop - shift}px`;
+      }
+    }
 
     // フォント読み込み待ち（Google Fonts）
     if (document.fonts && document.fonts.ready) {
@@ -640,7 +658,7 @@
     }
 
     const issueLabel = jpDate(state.common.common_issue_date) || todayISO().replaceAll('-', '.');
-    const baseCustomer = (invoices[0]?.customer || '請求先未設定').trim();
+    const baseCustomer = customerWithHonorific(invoices[0]?.customer || '').trim() || '請求先未設定';
     const customerLabel = invoices.length === 1
       ? baseCustomer
       : `${baseCustomer}ほか${invoices.length-1}件`;
