@@ -77,7 +77,7 @@
     }
     .a4 .customer{
       position:absolute;
-      top:22mm;
+      top:24mm;
       left:12mm;
       font-size:14pt;
       font-weight:700;
@@ -87,7 +87,7 @@
     }
     .a4 .issuer{
       position:absolute;
-      top:27mm;
+      top:29mm;
       right:12mm;
       width:80mm;
       text-align:right;
@@ -97,7 +97,7 @@
     }
     .a4 .dates{
       position:absolute;
-      top:38mm;
+      top:40mm;
       left:12mm;
       font-size:10pt;
       line-height:1.4;
@@ -105,7 +105,7 @@
     }
     .a4 .table{
       position:absolute;
-      top:52mm;
+      top:54mm;
       left:12mm;
       right:12mm;
       border:1px solid #000;
@@ -128,7 +128,7 @@
 
     .a4 .summary{
       position:absolute;
-      top:78mm;
+      top:80mm;
       right:12mm;
       width:70mm;
       font-size:10pt;
@@ -149,14 +149,14 @@
 
     .a4 .bankTitle{
       position:absolute;
-      top:97mm;
+      top:99mm;
       left:12mm;
       font-size:10pt;
       font-weight:900;
     }
     .a4 .bankText{
       position:absolute;
-      top:102mm;
+      top:104mm;
       left:12mm;
       right:12mm;
       font-size:9pt;
@@ -165,14 +165,14 @@
     }
     .a4 .remarkTitle{
       position:absolute;
-      bottom:18mm;
+      bottom:16mm;
       left:12mm;
       font-size:10pt;
       font-weight:900;
     }
     .a4 .remarkText{
       position:absolute;
-      bottom:8mm;
+      bottom:6mm;
       left:12mm;
       right:12mm;
       font-size:9pt;
@@ -259,14 +259,7 @@
             <th class="alignR">単価</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td id="p_item_name"></td>
-            <td id="p_item_form"></td>
-            <td id="p_qty" class="alignC"></td>
-            <td id="p_unit" class="alignR"></td>
-          </tr>
-        </tbody>
+        <tbody id="p_items_body"></tbody>
       </table>
 
       <div class="summary">
@@ -319,8 +312,10 @@
   }
   function fmtYen(n){ return Number(n||0).toLocaleString('ja-JP'); }
   function calc(inv){
-    const qty=Number(inv.qty||0), unit=Number(inv.unit_price||0), rate=Number(inv.tax_rate??0.10);
-    const sub=qty*unit; const tax=Math.round(sub*rate); const total=sub+tax;
+    const rate=Number(inv.tax_rate??0.10);
+    const items = Array.isArray(inv.items) ? inv.items : [];
+    const sub=items.reduce((sum,item)=>sum + (Number(item.qty||0) * Number(item.unit_price||0)),0);
+    const tax=Math.round(sub*rate); const total=sub+tax;
     return {sub,tax,total};
   }
   function toast(msg){
@@ -329,8 +324,34 @@
     window.__toastTimer=setTimeout(()=>el.classList.remove('show'),1800);
   }
 
+  function defaultItem(){
+    return { item_name:'', qty:1, unit_price:0 };
+  }
   function defaultInvoice(){
-    return { customer:'', item_name:'', qty:1, unit_price:0, tax_rate:0.10, remarks:'' };
+    return { customer:'', items:[defaultItem()], tax_rate:0.10, remarks:'' };
+  }
+  function normalizeInvoice(inv){
+    const normalized = {
+      customer: inv?.customer || '',
+      tax_rate: Number(inv?.tax_rate ?? 0.10),
+      remarks: inv?.remarks || '',
+      items: []
+    };
+    if (Array.isArray(inv?.items) && inv.items.length){
+      normalized.items = inv.items.map((item)=>({
+        item_name: item?.item_name || '',
+        qty: Number(item?.qty || 0),
+        unit_price: Number(item?.unit_price || 0)
+      }));
+    } else {
+      normalized.items = [{
+        item_name: inv?.item_name || '',
+        qty: Number(inv?.qty || 0),
+        unit_price: Number(inv?.unit_price || 0)
+      }];
+    }
+    if (!normalized.items.length) normalized.items=[defaultItem()];
+    return normalized;
   }
 
   let state = { common:{...DEFAULT_COMMON}, invoices:[defaultInvoice()] };
@@ -364,6 +385,20 @@
     c.className='card'; c.dataset.idx=String(idx);
     const {sub,tax,total}=calc(inv);
     const form=monthLabel(state.common.common_issue_date);
+    const itemRows = (inv.items || []).map((item,itemIdx)=>`
+      <div class="row itemRow" data-item-idx="${itemIdx}">
+        <div class="label">商品 #${itemIdx+1}</div>
+        <div style="display:grid;gap:8px;">
+          <input class="item_name" value="${escapeHtml(item.item_name)}" placeholder="例）D-1X" />
+          <input class="item_form" value="${escapeHtml(form)}" readonly />
+          <div class="two">
+            <input class="qty" inputmode="numeric" value="${escapeHtml(item.qty)}" placeholder="数量" />
+            <input class="unit_price" inputmode="numeric" value="${escapeHtml(item.unit_price)}" placeholder="単価（円）" />
+          </div>
+          <button class="delItemBtn danger" type="button">この商品を削除</button>
+        </div>
+      </div>
+    `).join('');
 
     c.innerHTML = `
       <div class="invoiceHeader">
@@ -381,15 +416,9 @@
         <div class="row"><div class="label">宛名（請求先）</div><input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）のみくい処 旨や 様" /></div>
 
         <div class="hr"></div>
-        <div class="sectionTitle">明細（1行）</div>
-
-        <div class="row"><div class="label">品名</div><input class="item_name" value="${escapeHtml(inv.item_name)}" placeholder="例）D-1X" /></div>
-        <div class="row"><div class="label">形式</div><input class="item_form" value="${escapeHtml(form)}" readonly /></div>
-
-        <div class="two">
-          <div class="row"><div class="label">数量</div><input class="qty" inputmode="numeric" value="${escapeHtml(inv.qty)}" /></div>
-          <div class="row"><div class="label">単価（円）</div><input class="unit_price" inputmode="numeric" value="${escapeHtml(inv.unit_price)}" /></div>
-        </div>
+        <div class="sectionTitle">明細（複数行）</div>
+        ${itemRows}
+        <button class="addItemBtn primary" type="button">＋ 商品を追加</button>
 
         <div class="row"><div class="label">税率</div><input class="tax_rate" inputmode="decimal" value="${escapeHtml(inv.tax_rate)}" placeholder="0.10" /></div>
 
@@ -412,11 +441,42 @@
       });
     };
     bind('.customer','customer',(v)=>v);
-    bind('.item_name','item_name',(v)=>v);
-    bind('.qty','qty',(v)=>Number(v||0));
-    bind('.unit_price','unit_price',(v)=>Number(v||0));
     bind('.tax_rate','tax_rate',(v)=>Number(v||0));
     bind('.remarks','remarks',(v)=>v);
+
+    c.querySelector('.addItemBtn').addEventListener('click',()=>{
+      const i=Number(c.dataset.idx);
+      state.invoices[i].items.push(defaultItem());
+      render();
+    });
+
+    c.addEventListener('input',(e)=>{
+      const target=e.target;
+      if(!(target instanceof HTMLElement)) return;
+      const row=target.closest('.itemRow');
+      if(!row) return;
+      const i=Number(c.dataset.idx);
+      const itemIdx=Number(row.dataset.itemIdx);
+      const item=state.invoices[i].items[itemIdx];
+      if(!item) return;
+      if(target.classList.contains('item_name')) item.item_name=target.value;
+      if(target.classList.contains('qty')) item.qty=Number(target.value||0);
+      if(target.classList.contains('unit_price')) item.unit_price=Number(target.value||0);
+      refreshMoney(c,state.invoices[i]);
+    });
+
+    c.addEventListener('click',(e)=>{
+      const target=e.target;
+      if(!(target instanceof HTMLElement)) return;
+      if(!target.classList.contains('delItemBtn')) return;
+      const row=target.closest('.itemRow');
+      if(!row) return;
+      const i=Number(c.dataset.idx);
+      const itemIdx=Number(row.dataset.itemIdx);
+      state.invoices[i].items.splice(itemIdx,1);
+      if(state.invoices[i].items.length===0) state.invoices[i].items.push(defaultItem());
+      render();
+    });
 
     c.querySelector('.delBtn').addEventListener('click',()=>{
       const i=Number(c.dataset.idx);
@@ -463,7 +523,9 @@
     try{
       const obj=JSON.parse(raw);
       if(obj && obj.common && Array.isArray(obj.invoices)){
-        state=obj;
+        state.common = obj.common || {...DEFAULT_COMMON};
+        state.invoices = (obj.invoices || []).map(normalizeInvoice);
+        if(state.invoices.length===0) state.invoices=[defaultInvoice()];
         if(!state.common.common_issue_date) state.common.common_issue_date=todayISO();
         writeCommonToUI(); render(); toast('読み込みました');
       }else toast('保存データ形式が不正です');
@@ -490,10 +552,16 @@
     if (due) dateLines += `振込期限：${due}`;
     $('#p_dates').textContent = dateLines.trim();
 
-    $('#p_item_name').textContent = inv.item_name || '';
-    $('#p_item_form').textContent = form || '';
-    $('#p_qty').textContent = String(inv.qty ?? '');
-    $('#p_unit').textContent = `${fmtYen(inv.unit_price || 0)}円`;
+    const body = $('#p_items_body');
+    const rows = (inv.items || []).map((item)=>`
+      <tr>
+        <td>${escapeHtml(item.item_name || '')}</td>
+        <td>${escapeHtml(form || '')}</td>
+        <td class="alignC">${escapeHtml(String(item.qty ?? ''))}</td>
+        <td class="alignR">${escapeHtml(`${fmtYen(item.unit_price || 0)}円`)}</td>
+      </tr>
+    `).join('');
+    body.innerHTML = rows || '<tr><td></td><td></td><td class="alignC"></td><td class="alignR"></td></tr>';
 
     const {sub,tax,total}=calc(inv);
     $('#p_sub').textContent = `¥${fmtYen(sub)}`;
