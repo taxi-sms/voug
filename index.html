@@ -29,6 +29,7 @@
       font-size:16px;
       background:#fff;
     }
+    input[readonly]{background:#f8f8f8}
     textarea{min-height:70px;resize:vertical;}
     .pill{display:inline-block;border:2px solid var(--border);border-radius:999px;padding:4px 10px;font-weight:900;font-size:12px;background:var(--card)}
     .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
@@ -59,9 +60,10 @@
   <div class="wrap">
     <h1>請求書PWA（請求先を縦に追加 → A4 PDF）</h1>
     <div class="small">
-      ・「＋ 請求先カードを追加」→ 各請求先の入力欄が縦に増えます。<br>
-      ・「PDFをまとめて作成」で、請求先ごとに1ページのA4 PDFが作れます。<br>
-      ・入力は端末内（localStorage）に保存できます。
+      ・請求日/振込期限は「共通項目」で1回だけ設定（全請求先で同一）。<br>
+      ・「形式」は請求日の月から自動で <b>○月分</b> を表示します（編集不要）。<br>
+      ・振込期限はカレンダー（date）から選択できます。<br>
+      ・「PDFをまとめて作成」で、請求先ごとに1ページのA4 PDFを作成します。
     </div>
 
     <div class="bar">
@@ -72,7 +74,7 @@
     </div>
 
     <div class="card">
-      <div class="sectionTitle">共通：自社情報 / 振込先</div>
+      <div class="sectionTitle">共通：自社情報</div>
       <div class="grid">
         <div class="row">
           <div class="label">発行元名</div>
@@ -99,6 +101,22 @@
 
         <div class="hr"></div>
 
+        <div class="sectionTitle">共通：請求日 / 振込期限</div>
+        <div class="two">
+          <div class="row">
+            <div class="label">請求日</div>
+            <input id="common_issue_date" type="date" />
+          </div>
+          <div class="row">
+            <div class="label">振込期限</div>
+            <input id="common_due_date" type="date" />
+          </div>
+        </div>
+        <div class="hint">※「形式」は請求日の月から自動表示（例：2月分）。</div>
+
+        <div class="hr"></div>
+
+        <div class="sectionTitle">共通：振込先</div>
         <div class="row">
           <div class="label">振込先（メイン）</div>
           <input id="bank_main" placeholder="例）○○銀行 ○○支店 普通 1234567 口座名…" />
@@ -108,6 +126,7 @@
           <input id="bank_sub" placeholder="例）○○銀行 ○○支店 普通 7654321 口座名…" />
         </div>
       </div>
+
       <div class="hint">
         ※ PDF生成は「jsPDF」をCDNで読み込みます。初回はオンラインで開いてください。
       </div>
@@ -120,8 +139,8 @@
     </div>
 
     <div class="small">
-      PWA化：iPhoneはSafariの共有 →「ホーム画面に追加」。AndroidはChrome →「アプリをインストール」。<br>
-      iPhone保存：PDF作成後「共有」→「“ファイル”に保存」が確実です（ダウンロードフォルダが見つからない場合の対策）。
+      iPhone保存：PDF作成後「共有」→「“ファイル”に保存」が確実です。<br>
+      ※ iOSで「ファイルを直接開く」は挙動が不安定なので、GitHub Pages等で開くのが安定です。
     </div>
   </div>
 
@@ -137,8 +156,7 @@
 
   const $ = (sel) => document.querySelector(sel);
   const invoicesEl = $('#invoices');
-
-  const STORAGE_KEY = 'invoice_pwa_v1';
+  const STORAGE_KEY = 'invoice_pwa_v4';
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -146,30 +164,30 @@
     issuer_tel: '011-614-5286',
     issuer_person: '担当 畑野千春 090-7842-8798',
     issuer_email: 'voug286@gmeil.com',
+    common_issue_date: '', // YYYY-MM-DD
+    common_due_date: '',   // YYYY-MM-DD
     bank_main: '旭川信用金庫 本店 普通口座 1472165 口座名 有限会社ニューアロー',
     bank_sub: '楽天銀行 チェロ支店（214） 普通口座 1310243 口座名 ハタノチハル'
   };
 
-  function todayYMD(){
+  function todayISO(){
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth()+1).padStart(2,'0');
     const day = String(d.getDate()).padStart(2,'0');
-    return `${y}.${m}.${day}`;
+    return `${y}-${m}-${day}`;
   }
 
-  function defaultInvoice(){
-    return {
-      customer: '',
-      issue_date: todayYMD(),
-      due_date: '',
-      item_name: '',
-      item_form: '',
-      qty: 1,
-      unit_price: 0,
-      tax_rate: 0.10,
-      remarks: ''
-    };
+  function monthLabelFromISO(iso){ // YYYY-MM-DD -> "2月分"
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    const m = Number(iso.slice(5,7));
+    if (!m) return '';
+    return `${m}月分`;
+  }
+
+  function jpDateFromISO(iso){ // YYYY-MM-DD -> "YYYY.MM.DD"
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+    return iso.replaceAll('-', '.');
   }
 
   function escapeHtml(s){
@@ -184,6 +202,17 @@
     el.classList.add('show');
     clearTimeout(window.__toastTimer);
     window.__toastTimer = setTimeout(()=>el.classList.remove('show'), 1800);
+  }
+
+  function defaultInvoice(){
+    return {
+      customer: '',
+      item_name: '',
+      qty: 1,
+      unit_price: 0,
+      tax_rate: 0.10,
+      remarks: ''
+    };
   }
 
   function calc(inv){
@@ -202,12 +231,17 @@
     invoices: [ defaultInvoice() ]
   };
 
+  // 初期：請求日は今日をセット
+  state.common.common_issue_date = todayISO();
+
   function readCommonFromUI(){
     state.common.issuer_name = $('#issuer_name').value.trim();
     state.common.issuer_addr = $('#issuer_addr').value.trim();
     state.common.issuer_tel = $('#issuer_tel').value.trim();
     state.common.issuer_person = $('#issuer_person').value.trim();
     state.common.issuer_email = $('#issuer_email').value.trim();
+    state.common.common_issue_date = $('#common_issue_date').value.trim();
+    state.common.common_due_date = $('#common_due_date').value.trim();
     state.common.bank_main = $('#bank_main').value.trim();
     state.common.bank_sub = $('#bank_sub').value.trim();
   }
@@ -218,6 +252,8 @@
     $('#issuer_tel').value = state.common.issuer_tel ?? '';
     $('#issuer_person').value = state.common.issuer_person ?? '';
     $('#issuer_email').value = state.common.issuer_email ?? '';
+    $('#common_issue_date').value = state.common.common_issue_date ?? '';
+    $('#common_due_date').value = state.common.common_due_date ?? '';
     $('#bank_main').value = state.common.bank_main ?? '';
     $('#bank_sub').value = state.common.bank_sub ?? '';
   }
@@ -227,6 +263,7 @@
     c.className = 'card';
     c.dataset.idx = String(idx);
     const {sub, tax, total} = calc(inv);
+    const formLabel = monthLabelFromISO(state.common.common_issue_date);
 
     c.innerHTML = `
       <div class="invoiceHeader">
@@ -246,17 +283,6 @@
           <input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）〇〇 様" />
         </div>
 
-        <div class="two">
-          <div class="row">
-            <div class="label">請求日</div>
-            <input class="issue_date" value="${escapeHtml(inv.issue_date)}" placeholder="例）2026.02.21" />
-          </div>
-          <div class="row">
-            <div class="label">振込期限</div>
-            <input class="due_date" value="${escapeHtml(inv.due_date)}" placeholder="例）2026.02.28" />
-          </div>
-        </div>
-
         <div class="hr"></div>
         <div class="sectionTitle">明細（1行）</div>
 
@@ -264,9 +290,10 @@
           <div class="label">品名</div>
           <input class="item_name" value="${escapeHtml(inv.item_name)}" placeholder="例）D-1X" />
         </div>
+
         <div class="row">
           <div class="label">形式</div>
-          <input class="item_form" value="${escapeHtml(inv.item_form)}" placeholder="例）2月分" />
+          <input class="item_form" value="${escapeHtml(formLabel)}" readonly />
         </div>
 
         <div class="two">
@@ -303,16 +330,12 @@
       el.addEventListener('input', () => {
         const i = Number(c.dataset.idx);
         state.invoices[i][key] = parser(el.value);
-        // 金額表示更新
         refreshCardMoney(c, state.invoices[i]);
       });
     };
 
     bind('.customer','customer',(v)=>v);
-    bind('.issue_date','issue_date',(v)=>v);
-    bind('.due_date','due_date',(v)=>v);
     bind('.item_name','item_name',(v)=>v);
-    bind('.item_form','item_form',(v)=>v);
     bind('.qty','qty',(v)=>Number(v||0));
     bind('.unit_price','unit_price',(v)=>Number(v||0));
     bind('.tax_rate','tax_rate',(v)=>Number(v||0));
@@ -352,6 +375,13 @@
     });
   }
 
+  function updateAllFormLabels(){
+    // 請求日の月変更に合わせて、表示だけ更新
+    document.querySelectorAll('.item_form').forEach(el => {
+      el.value = monthLabelFromISO(state.common.common_issue_date);
+    });
+  }
+
   function save(){
     readCommonFromUI();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -365,6 +395,7 @@
       const obj = JSON.parse(raw);
       if (obj && obj.common && Array.isArray(obj.invoices)){
         state = obj;
+        if (!state.common.common_issue_date) state.common.common_issue_date = todayISO();
         writeCommonToUI();
         render();
         toast('読み込みました');
@@ -395,6 +426,9 @@
     const pageH = 297;
 
     const common = state.common;
+    const issueDateJP = jpDateFromISO(common.common_issue_date || '');
+    const dueDateJP = jpDateFromISO(common.common_due_date || '');
+    const formLabel = monthLabelFromISO(common.common_issue_date || '');
 
     invoices.forEach((inv, pageIndex) => {
       if (pageIndex > 0) doc.addPage();
@@ -417,17 +451,17 @@
       doc.setFont('helvetica','normal');
       let y = margin + 16;
       const rightX = pageW - margin;
-      const r = (t)=>{ doc.text(t, rightX, y, {align:'right'}); y += 4.2; };
+      const r = (t)=>{ if(t) { doc.text(t, rightX, y, {align:'right'}); y += 4.2; } };
       r(common.issuer_name || '');
       r(common.issuer_addr || '');
-      r((common.issuer_tel ? `TEL ${common.issuer_tel}` : '').trim());
+      r(common.issuer_tel ? `TEL ${common.issuer_tel}` : '');
       r(common.issuer_person || '');
       r(common.issuer_email || '');
 
-      // 日付/期限
+      // 日付/期限（共通）
       doc.setFontSize(10);
-      doc.text(`請求日：${inv.issue_date || ''}`, margin, margin + 28);
-      if (inv.due_date) doc.text(`振込期限：${inv.due_date}`, margin, margin + 34);
+      doc.text(`請求日：${issueDateJP || ''}`, margin, margin + 28);
+      if (dueDateJP) doc.text(`振込期限：${dueDateJP}`, margin, margin + 34);
 
       // 明細テーブル
       const tableTop = margin + 42;
@@ -457,7 +491,7 @@
       doc.line(colX[3], bodyTop, colX[3], bodyTop + rowH);
 
       doc.text(inv.item_name || '', colX[0] + 2, bodyTop + 6);
-      doc.text(inv.item_form || '', colX[1] + 2, bodyTop + 6);
+      doc.text(formLabel || '', colX[1] + 2, bodyTop + 6);
       doc.text(String(inv.qty ?? ''), colX[2] + 2, bodyTop + 6);
       doc.text(`${fmtYen(inv.unit_price || 0)}円`, colX[4] - 2, bodyTop + 6, {align:'right'});
 
@@ -526,13 +560,16 @@
     await generatePdf(state.invoices);
   });
 
-  // 共通欄の変更は state へ即反映（保存しなくてもPDF反映）
+  // 共通欄：変更は即 state へ反映（PDF/形式へ反映）
   ['issuer_name','issuer_addr','issuer_tel','issuer_person','issuer_email','bank_main','bank_sub']
-    .forEach(id => {
-      $('#'+id).addEventListener('input', () => {
-        readCommonFromUI();
-      });
-    });
+    .forEach(id => $('#'+id).addEventListener('input', () => readCommonFromUI()));
+
+  // 請求日変更 → 形式（○月分）を全カードに反映
+  $('#common_issue_date').addEventListener('change', () => {
+    readCommonFromUI();
+    updateAllFormLabels();
+  });
+  $('#common_due_date').addEventListener('change', () => readCommonFromUI());
 
   // 初期表示
   writeCommonToUI();
