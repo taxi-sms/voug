@@ -1,4 +1,4 @@
-const CACHE_NAME = 'invoice-pwa-htmlpdf-v4';
+const CACHE_NAME = 'invoice-pwa-htmlpdf-v5';
 const CORE_ASSETS = [
   './',
   './index.html',
