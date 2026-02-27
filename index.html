@@ -60,13 +60,15 @@
     textarea{min-height:70px;resize:vertical;}
     .pill{display:inline-block;border:2px solid var(--border);border-radius:999px;padding:4px 10px;font-weight:900;font-size:12px;background:var(--card)}
     .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+    .invoiceTitleWrap{min-width:0;flex:1 1 auto;}
     .invoiceMeta{display:block;}
     .invoiceCollapsedTitle{
       display:none;
       font-size:15px;
       font-weight:900;
       line-height:1.3;
-      max-width:380px;
+      width:100%;
+      max-width:none;
       overflow:hidden;
       white-space:nowrap;
       text-overflow:ellipsis;
@@ -77,12 +79,11 @@
     .card.isCollapsed .invoiceMeta{display:none;}
     .card.isCollapsed .invoiceCollapsedTitle{display:block;}
     .card.isCollapsed .invoiceBody{display:none;}
+    .card.isCollapsed .invoiceHeader .bar{flex-wrap:nowrap;flex:0 0 auto;}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
     @media (max-width:720px){
       .row{grid-template-columns:1fr;}
       .two{grid-template-columns:1fr;}
-      .card.isCollapsed .invoiceHeader{flex-wrap:wrap;}
-      .invoiceCollapsedTitle{max-width:100%;}
       .commonCollapsedTitle{max-width:100%;}
     }
     .hr{height:1px;background:#ddd;margin:10px 0;}
@@ -250,7 +251,7 @@
 
     <div id="commonCard" class="card commonCard">
       <div class="commonHeader">
-        <div style="min-width:0;">
+        <div class="invoiceTitleWrap">
           <div class="sectionTitle" style="margin:0;">共通：自社情報</div>
           <div id="commonCollapsedTitle" class="commonCollapsedTitle"></div>
         </div>
@@ -487,7 +488,7 @@
 
     c.innerHTML = `
       <div class="invoiceHeader">
-        <div style="min-width:0;">
+        <div class="invoiceTitleWrap">
           <div class="invoiceMeta">
             <div class="pill">請求先 #${idx+1}</div>
             <div class="small" style="margin-top:6px;">このカード = PDF 1ページ</div>
