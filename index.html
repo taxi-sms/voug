@@ -497,7 +497,7 @@
         <div class="bar" style="margin:0;">
           <button class="pdfBtn primary">${inv.collapsed ? 'PDF出力' : 'この請求先のPDF'}</button>
           <button class="toggleBtn">${inv.collapsed ? '展開' : '折りたたむ'}</button>
-          <button class="delBtn danger">削除</button>
+          ${inv.collapsed ? '' : '<button class="delBtn danger">削除</button>'}
         </div>
       </div>
 
@@ -574,12 +574,15 @@
       render();
     });
 
-    c.querySelector('.delBtn').addEventListener('click',()=>{
-      const i=Number(c.dataset.idx);
-      state.invoices.splice(i,1);
-      if(state.invoices.length===0) state.invoices.push(defaultInvoice());
-      render(); toast('削除しました');
-    });
+    const delBtn = c.querySelector('.delBtn');
+    if(delBtn){
+      delBtn.addEventListener('click',()=>{
+        const i=Number(c.dataset.idx);
+        state.invoices.splice(i,1);
+        if(state.invoices.length===0) state.invoices.push(defaultInvoice());
+        render(); toast('削除しました');
+      });
+    }
 
     c.querySelector('.pdfBtn').addEventListener('click',async()=>{
       readCommonFromUI();
