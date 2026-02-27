@@ -4,8 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>請求書PWA（完全同一レイアウト版）</title>
-  <meta name="theme-color" content="#111111" />
+  <meta name="theme-color" content="#1a1a1a" />
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
 
   <!-- 画面表示フォント（PDFはキャンバス化するので日本語OK） -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,17 +16,35 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
 
   <style>
-    :root{ --bg:#fff; --text:#111; --muted:#666; --border:#111; --card:#f6f6f6; }
+    :root{ --bg:#1a1a1a; --text:#f2f5fb; --muted:#666; --border:#111; --card:#f6f6f6; }
     html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP", system-ui, -apple-system, sans-serif;overflow-x:hidden;}
+    .hero{width:100%;background:#1a1a1a;}
+    .heroInner{max-width:100%;margin:0 auto;padding:0;}
+    .hero img{display:block;width:100%;height:auto;}
     .wrap{max-width:980px;margin:0 auto;padding:14px;}
     h1{font-size:18px;margin:0 0 10px;}
     .small{font-size:12px;color:var(--muted);line-height:1.55;}
     .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
     button{border:2px solid var(--border);background:#fff;padding:10px 12px;font-weight:900;border-radius:12px;cursor:pointer}
     button.primary{background:#111;color:#fff;}
+    button.saveBtn{border-color:#2f9e44;color:#2f9e44;background:#fff;}
     button.danger{border-color:#c00;color:#c00}
-    .card{border:2px solid var(--border);border-radius:16px;padding:12px;background:#fff;margin:10px 0;}
+    .card{border:2px solid var(--border);border-radius:16px;padding:12px;background:#fff;margin:10px 0;color:#111;}
     .sectionTitle{font-weight:900;margin:4px 0 10px;}
+    .commonHeader{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;}
+    .commonCollapsedTitle{
+      display:none;
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+      max-width:540px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .commonBody{margin-top:10px;}
+    .commonCard.isCollapsed .commonBody{display:none;}
+    .commonCard.isCollapsed .commonCollapsedTitle{display:block;}
     .grid{display:grid;grid-template-columns:1fr;gap:10px;}
     .row{display:grid;grid-template-columns: 130px 1fr; gap:10px; align-items:center;}
     .label{font-size:12px;color:var(--muted);font-weight:900;}
@@ -39,8 +60,31 @@
     textarea{min-height:70px;resize:vertical;}
     .pill{display:inline-block;border:2px solid var(--border);border-radius:999px;padding:4px 10px;font-weight:900;font-size:12px;background:var(--card)}
     .invoiceHeader{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+    .invoiceMeta{display:block;}
+    .invoiceCollapsedTitle{
+      display:none;
+      font-size:15px;
+      font-weight:900;
+      line-height:1.3;
+      max-width:380px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .invoiceBody{margin-top:10px;}
+    .card.isCollapsed{padding:10px 12px;}
+    .card.isCollapsed .invoiceHeader{align-items:center;flex-wrap:nowrap;}
+    .card.isCollapsed .invoiceMeta{display:none;}
+    .card.isCollapsed .invoiceCollapsedTitle{display:block;}
+    .card.isCollapsed .invoiceBody{display:none;}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-    @media (max-width:720px){ .row{grid-template-columns:1fr;} .two{grid-template-columns:1fr;} }
+    @media (max-width:720px){
+      .row{grid-template-columns:1fr;}
+      .two{grid-template-columns:1fr;}
+      .card.isCollapsed .invoiceHeader{flex-wrap:wrap;}
+      .invoiceCollapsedTitle{max-width:100%;}
+      .commonCollapsedTitle{max-width:100%;}
+    }
     .hr{height:1px;background:#ddd;margin:10px 0;}
     .moneyBox{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
     .moneyBox .m{border:2px solid #ddd;border-radius:12px;padding:8px;background:#fafafa}
@@ -187,21 +231,32 @@
 </head>
 
 <body>
+  <div class="hero">
+    <div class="heroInner">
+      <img src="VOUG-IV-SS.png" alt="F.D.L VOUG Invoice Builder" />
+    </div>
+  </div>
+
   <div class="wrap">
-    <h1>VOUG用請求書作成アプリです。</h1>
     <div class="small">
     </div>
 
     <div class="bar">
-      <button id="addBtn" class="primary">＋ 請求先カードを追加</button>
-      <button id="saveBtn">入力を保存</button>
-      <button id="loadBtn">保存を読み込み</button>
-      <button id="clearBtn" class="danger">保存を消去</button>
+      <button id="addBtn">＋ 請求先カードを追加</button>
+      <button id="saveBtn" class="saveBtn">入力を保存</button>
+      <button id="loadBtn">保存を読込</button>
     </div>
+    <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
 
-    <div class="card">
-      <div class="sectionTitle">共通：自社情報</div>
-      <div class="grid">
+    <div id="commonCard" class="card commonCard">
+      <div class="commonHeader">
+        <div style="min-width:0;">
+          <div class="sectionTitle" style="margin:0;">共通：自社情報</div>
+          <div id="commonCollapsedTitle" class="commonCollapsedTitle"></div>
+        </div>
+        <button id="toggleCommonBtn" type="button">折りたたむ</button>
+      </div>
+      <div class="grid commonBody">
         <div class="row"><div class="label">発行元名</div><input id="issuer_name" /></div>
         <div class="row"><div class="label">住所</div><input id="issuer_addr" /></div>
         <div class="two">
@@ -212,26 +267,25 @@
 
         <div class="hr"></div>
 
-        <div class="sectionTitle">共通：請求日 / 振込期限</div>
-        <div class="two">
-          <div class="row"><div class="label">請求日</div><input id="common_issue_date" type="date" /></div>
-          <div class="row"><div class="label">振込期限</div><input id="common_due_date" type="date" /></div>
-        </div>
-        <div class="hint">※ 形式は請求日の月から自動で「○月分」になります。</div>
-
-        <div class="hr"></div>
-
         <div class="sectionTitle">共通：振込先</div>
         <div class="row"><div class="label">振込先（メイン）</div><input id="bank_main" /></div>
         <div class="row"><div class="label">予備口座</div><input id="bank_sub" /></div>
       </div>
     </div>
 
+    <div class="card">
+      <div class="sectionTitle">共通：請求日 / 振込期限</div>
+      <div class="grid">
+        <div class="two">
+          <div class="row"><div class="label">請求日</div><input id="common_issue_date" type="date" /></div>
+          <div class="row"><div class="label">振込期限</div><input id="common_due_date" type="date" /></div>
+        </div>
+        <div class="hint">※ 形式は請求日の月から自動で「○月分」になります。</div>
+      </div>
+    </div>
+
     <div id="invoices"></div>
 
-    <div class="bar">
-      <button id="pdfAllBtn" class="primary">PDFをまとめて作成（各請求先＝1ページ）</button>
-    </div>
   </div>
 
   <div id="toast" class="toast"></div>
@@ -284,7 +338,7 @@
 
   const $ = (s)=>document.querySelector(s);
   const invoicesEl = $('#invoices');
-  const STORAGE_KEY = 'invoice_pwa_htmlpdf_v1';
+  const BACKUP_FILENAME = 'VOUG請求情報.json';
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -332,13 +386,17 @@
     return { item_name:'', qty:'', unit_price:'' };
   }
   function defaultInvoice(){
-    return { customer:'', items:[defaultItem()], tax_rate:0.10, remarks:'' };
+    return { customer:'', items:[defaultItem()], tax_rate:0.10, remarks:'', collapsed:true };
+  }
+  function createDefaultInvoices(count=12){
+    return Array.from({length:count}, ()=>defaultInvoice());
   }
   function normalizeInvoice(inv){
     const normalized = {
       customer: inv?.customer || '',
       tax_rate: Number(inv?.tax_rate ?? 0.10),
       remarks: inv?.remarks || '',
+      collapsed: typeof inv?.collapsed === 'boolean' ? inv.collapsed : true,
       items: []
     };
     if (Array.isArray(inv?.items) && inv.items.length){
@@ -358,8 +416,27 @@
     return normalized;
   }
 
-  let state = { common:{...DEFAULT_COMMON}, invoices:[defaultInvoice()] };
+  let state = {
+    common:{...DEFAULT_COMMON},
+    invoices:createDefaultInvoices(12),
+    ui:{ commonCollapsed:true }
+  };
   state.common.common_issue_date = todayISO();
+  function commonSummary(){
+    const name = state.common.issuer_name || '未設定';
+    const tel = state.common.issuer_tel || 'TEL未設定';
+    const email = state.common.issuer_email || 'メール未設定';
+    return `${name} / ${tel} / ${email}`;
+  }
+  function syncCommonCollapsedUI(){
+    const commonCard = $('#commonCard');
+    const toggleBtn = $('#toggleCommonBtn');
+    const title = $('#commonCollapsedTitle');
+    if(!commonCard || !toggleBtn || !title) return;
+    title.textContent = commonSummary();
+    commonCard.classList.toggle('isCollapsed', Boolean(state.ui?.commonCollapsed));
+    toggleBtn.textContent = state.ui?.commonCollapsed ? '展開' : '折りたたむ';
+  }
 
   function readCommonFromUI(){
     state.common.issuer_name=$('#issuer_name').value.trim();
@@ -371,6 +448,7 @@
     state.common.common_due_date=$('#common_due_date').value.trim();
     state.common.bank_main=$('#bank_main').value.trim();
     state.common.bank_sub=$('#bank_sub').value.trim();
+    syncCommonCollapsedUI();
   }
   function writeCommonToUI(){
     $('#issuer_name').value=state.common.issuer_name||'';
@@ -382,13 +460,16 @@
     $('#common_due_date').value=state.common.common_due_date||'';
     $('#bank_main').value=state.common.bank_main||'';
     $('#bank_sub').value=state.common.bank_sub||'';
+    syncCommonCollapsedUI();
   }
 
   function createCard(inv, idx){
     const c=document.createElement('div');
     c.className='card'; c.dataset.idx=String(idx);
+    if(inv.collapsed) c.classList.add('isCollapsed');
     const {sub,tax,total}=calc(inv);
     const form=monthLabel(state.common.common_issue_date);
+    const customerLabel = customerWithHonorific(inv.customer).trim() || `請求先 #${idx+1}`;
     const itemRows = (inv.items || []).map((item,itemIdx)=>`
       <div class="row itemRow" data-item-idx="${itemIdx}">
         <div class="label">商品 #${itemIdx+1}</div>
@@ -406,18 +487,22 @@
 
     c.innerHTML = `
       <div class="invoiceHeader">
-        <div>
-          <div class="pill">請求先 #${idx+1}</div>
-          <div class="small" style="margin-top:6px;">このカード = PDF 1ページ</div>
+        <div style="min-width:0;">
+          <div class="invoiceMeta">
+            <div class="pill">請求先 #${idx+1}</div>
+            <div class="small" style="margin-top:6px;">このカード = PDF 1ページ</div>
+          </div>
+          <div class="invoiceCollapsedTitle">${escapeHtml(customerLabel)}</div>
         </div>
         <div class="bar" style="margin:0;">
-          <button class="pdfBtn primary">この請求先のPDF</button>
+          <button class="pdfBtn primary">${inv.collapsed ? 'PDF出力' : 'この請求先のPDF'}</button>
+          <button class="toggleBtn">${inv.collapsed ? '展開' : '折りたたむ'}</button>
           <button class="delBtn danger">削除</button>
         </div>
       </div>
 
-      <div class="grid" style="margin-top:10px;">
-        <div class="row"><div class="label">宛名（請求先）</div><input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）のみくい処 旨や(様は自動で入る)" /></div>
+      <div class="grid invoiceBody">
+        <div class="row"><div class="label">宛名（請求先）</div><input class="customer" value="${escapeHtml(inv.customer)}" placeholder="例）のみくい処 旨や 様" /></div>
 
         <div class="hr"></div>
         <div class="sectionTitle">明細（複数行）</div>
@@ -441,6 +526,13 @@
       el.addEventListener('input',()=>{
         const i=Number(c.dataset.idx);
         state.invoices[i][key]=parser(el.value);
+        if(key==='customer'){
+          const label = c.querySelector('.invoiceCollapsedTitle');
+          if(label){
+            const text = customerWithHonorific(state.invoices[i].customer).trim() || `請求先 #${i+1}`;
+            label.textContent = text;
+          }
+        }
         refreshMoney(c,state.invoices[i]);
       });
     };
@@ -494,6 +586,11 @@
       const i=Number(c.dataset.idx);
       await generatePdf([state.invoices[i]]);
     });
+    c.querySelector('.toggleBtn').addEventListener('click',()=>{
+      const i=Number(c.dataset.idx);
+      state.invoices[i].collapsed = !state.invoices[i].collapsed;
+      render();
+    });
 
     return c;
   }
@@ -516,27 +613,105 @@
     document.querySelectorAll('.item_form').forEach(el=>el.value=monthLabel(state.common.common_issue_date));
   }
 
-  function save(){
+  function exportStateAsBackupObject(){
     readCommonFromUI();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    toast('保存しました');
+    return {
+      format: 'VOUG請求情報',
+      version: 1,
+      saved_at: new Date().toISOString(),
+      state
+    };
   }
-  function load(){
-    const raw=localStorage.getItem(STORAGE_KEY);
-    if(!raw){ toast('保存データがありません'); return; }
+  function applyLoadedState(payload){
+    if(!(payload && payload.common && Array.isArray(payload.invoices))){
+      throw new Error('invalid_payload');
+    }
+    state.common = payload.common || {...DEFAULT_COMMON};
+    state.invoices = (payload.invoices || []).map(normalizeInvoice);
+    state.ui = {
+      commonCollapsed: typeof payload?.ui?.commonCollapsed === 'boolean'
+        ? payload.ui.commonCollapsed
+        : true
+    };
+    if(state.invoices.length===0) state.invoices=createDefaultInvoices(12);
+    if(!state.common.common_issue_date) state.common.common_issue_date=todayISO();
+    writeCommonToUI();
+    render();
+  }
+  function parseBackupState(raw){
     try{
       const obj=JSON.parse(raw);
-      if(obj && obj.common && Array.isArray(obj.invoices)){
-        state.common = obj.common || {...DEFAULT_COMMON};
-        state.invoices = (obj.invoices || []).map(normalizeInvoice);
-        if(state.invoices.length===0) state.invoices=[defaultInvoice()];
-        if(!state.common.common_issue_date) state.common.common_issue_date=todayISO();
-        writeCommonToUI(); render(); toast('読み込みました');
-      }else toast('保存データ形式が不正です');
-    }catch(e){ toast('読み込みに失敗しました'); }
+      const payload = (obj && obj.state && obj.format === 'VOUG請求情報')
+        ? obj.state
+        : obj;
+      applyLoadedState(payload);
+      return true;
+    }catch(_){
+      return false;
+    }
   }
-  function clearSaved(){ localStorage.removeItem(STORAGE_KEY); toast('保存を消去しました'); }
-
+  async function save(){
+    const backup = exportStateAsBackupObject();
+    const text = JSON.stringify(backup, null, 2);
+    try{
+      if(window.showSaveFilePicker){
+        const handle = await window.showSaveFilePicker({
+          suggestedName: BACKUP_FILENAME,
+          types: [{
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        toast('JSONバックアップを保存しました');
+        return;
+      }
+    }catch(err){
+      if(err && err.name === 'AbortError') return;
+    }
+    const blob = new Blob([text], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = BACKUP_FILENAME;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 500);
+    toast('JSONバックアップを保存しました');
+  }
+  async function load(){
+    try{
+      if(window.showOpenFilePicker){
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: [{
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const file = await handle.getFile();
+        const raw = await file.text();
+        if(parseBackupState(raw)){
+          toast('JSONバックアップを読み込みました');
+        }else{
+          toast('JSON形式が不正です');
+        }
+        return;
+      }
+    }catch(err){
+      if(err && err.name === 'AbortError') return;
+    }
+    const input = $('#backupFileInput');
+    if(!input){
+      toast('読込入力が見つかりません');
+      return;
+    }
+    input.value = '';
+    input.click();
+  }
   // ===== PDF生成（A4 / 完全同一レイアウト）=====
   async function renderA4(inv){
     const common=state.common;
@@ -672,8 +847,28 @@
   $('#addBtn').addEventListener('click',()=>{ state.invoices.push(defaultInvoice()); render(); toast('請求先カードを追加しました'); });
   $('#saveBtn').addEventListener('click',save);
   $('#loadBtn').addEventListener('click',load);
-  $('#clearBtn').addEventListener('click',clearSaved);
-  $('#pdfAllBtn').addEventListener('click',async()=>{ readCommonFromUI(); await generatePdf(state.invoices); });
+  $('#backupFileInput').addEventListener('change', async(e)=>{
+    const input = e.target;
+    if(!(input instanceof HTMLInputElement)) return;
+    const file = input.files && input.files[0];
+    if(!file) return;
+    try{
+      const raw = await file.text();
+      if(parseBackupState(raw)){
+        toast('JSONバックアップを読み込みました');
+      }else{
+        toast('JSON形式が不正です');
+      }
+    }catch(_){
+      toast('読み込みに失敗しました');
+    }finally{
+      input.value = '';
+    }
+  });
+  $('#toggleCommonBtn').addEventListener('click',()=>{
+    state.ui.commonCollapsed = !state.ui.commonCollapsed;
+    syncCommonCollapsedUI();
+  });
 
   ['issuer_name','issuer_addr','issuer_tel','issuer_person','issuer_email','bank_main','bank_sub']
     .forEach(id => $('#'+id).addEventListener('input',()=>readCommonFromUI()));
@@ -683,6 +878,7 @@
   // 初期表示
   writeCommonToUI();
   render();
+  syncCommonCollapsedUI();
 </script>
 </body>
 </html>

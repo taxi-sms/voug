@@ -1,9 +1,16 @@
-const CACHE_NAME = 'invoice-pwa-htmlpdf-v5';
+const CACHE_NAME = 'invoice-pwa-htmlpdf-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './offline.html'
+  './offline.html',
+  './VOUG-IV-SS.png',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-512-maskable.png',
+  './apple-touch-icon.png',
+  './favicon-32.png',
+  './favicon-16.png'
 ];
 
 self.addEventListener('install', (event) => {
