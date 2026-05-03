@@ -24,6 +24,15 @@
     .wrap{max-width:980px;margin:0 auto;padding:14px;}
     h1{font-size:18px;margin:0 0 10px;}
     .small{font-size:12px;color:var(--muted);line-height:1.55;}
+    .appVersion{
+      margin:6px 0 8px;
+      color:#fff;
+      font-size:11px;
+      font-weight:700;
+      line-height:1.2;
+      text-align:center;
+      opacity:.9;
+    }
     .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px;}
     button{border:2px solid var(--border);background:#fff;padding:10px 12px;font-weight:900;border-radius:12px;cursor:pointer}
     button.primary{background:#111;color:#fff;}
@@ -239,8 +248,7 @@
   </div>
 
   <div class="wrap">
-    <div class="small">
-    </div>
+    <div class="appVersion">VOUG I.B. ver-6</div>
 
     <div class="bar">
       <button id="addBtn">＋ 請求先カードを追加</button>
@@ -630,7 +638,7 @@
     if(!(payload && payload.common && Array.isArray(payload.invoices))){
       throw new Error('invalid_payload');
     }
-    state.common = payload.common || {...DEFAULT_COMMON};
+    state.common = {...DEFAULT_COMMON, ...(payload.common || {})};
     state.invoices = (payload.invoices || []).map(normalizeInvoice);
     state.ui = {
       commonCollapsed: typeof payload?.ui?.commonCollapsed === 'boolean'
@@ -642,17 +650,33 @@
     writeCommonToUI();
     render();
   }
+  function extractBackupPayload(obj){
+    if(!obj || typeof obj !== 'object') return null;
+    if(obj.common && Array.isArray(obj.invoices)) return obj;
+    if(obj.state && typeof obj.state === 'object' && obj.state.common && Array.isArray(obj.state.invoices)){
+      return obj.state;
+    }
+    return null;
+  }
   function parseBackupState(raw){
     try{
-      const obj=JSON.parse(raw);
-      const payload = (obj && obj.state && obj.format === 'VOUG請求情報')
-        ? obj.state
-        : obj;
+      const obj=JSON.parse(String(raw || '').replace(/^\uFEFF/, '').trim());
+      const payload = extractBackupPayload(obj);
       applyLoadedState(payload);
       return true;
-    }catch(_){
+    }catch(err){
+      console.warn('Failed to load VOUG invoice backup JSON:', err);
       return false;
     }
+  }
+  function readTextFile(file){
+    if(file && typeof file.text === 'function') return file.text();
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+      reader.readAsText(file, 'utf-8');
+    });
   }
   async function save(){
     const backup = exportStateAsBackupObject();
@@ -697,7 +721,7 @@
           }]
         });
         const file = await handle.getFile();
-        const raw = await file.text();
+        const raw = await readTextFile(file);
         if(parseBackupState(raw)){
           toast('JSONバックアップを読み込みました');
         }else{
@@ -857,7 +881,7 @@
     const file = input.files && input.files[0];
     if(!file) return;
     try{
-      const raw = await file.text();
+      const raw = await readTextFile(file);
       if(parseBackupState(raw)){
         toast('JSONバックアップを読み込みました');
       }else{
