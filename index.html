@@ -111,6 +111,31 @@
     }
     .toast.show{opacity:1;}
     .hint{font-size:12px;color:var(--muted);margin-top:8px}
+    .choiceModal{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      box-sizing:border-box;
+      background:rgba(0,0,0,.58);
+      z-index:10000;
+    }
+    .choiceModal[hidden]{display:none;}
+    .choiceDialog{
+      width:min(420px,100%);
+      box-sizing:border-box;
+      border:2px solid #111;
+      border-radius:16px;
+      padding:18px;
+      background:#fff;
+      color:#111;
+      box-shadow:0 18px 50px rgba(0,0,0,.3);
+    }
+    .choiceMessage{font-size:16px;font-weight:900;line-height:1.55;text-align:center;}
+    .choiceActions{display:flex;justify-content:center;gap:10px;margin-top:18px;}
+    .choiceActions button{min-width:110px;}
 
     /* ===== A4請求書（PDF化対象） ===== */
     .a4stage{position:fixed; left:0; top:0; width:210mm; height:297mm; background:#fff; opacity:0; pointer-events:none; transform:translateX(-200vw); }
@@ -248,7 +273,7 @@
   </div>
 
   <div class="wrap">
-    <div class="appVersion">VOUG I.B. ver-7</div>
+    <div class="appVersion">VOUG I.B. ver-8</div>
 
     <div class="bar">
       <button id="addBtn">＋ 請求先カードを追加</button>
@@ -299,6 +324,16 @@
 
   <div id="toast" class="toast"></div>
 
+  <div id="choiceModal" class="choiceModal" hidden>
+    <div class="choiceDialog" role="dialog" aria-modal="true" aria-labelledby="choiceMessage">
+      <div id="choiceMessage" class="choiceMessage"></div>
+      <div class="choiceActions">
+        <button id="choiceNoBtn" type="button">いいえ</button>
+        <button id="choiceYesBtn" class="danger" type="button">はい</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PDF化用のA4ステージ（画面外） -->
   <div class="a4stage" aria-hidden="true">
     <div id="a4" class="a4">
@@ -347,11 +382,8 @@
 
   const $ = (s)=>document.querySelector(s);
   const invoicesEl = $('#invoices');
-  const BACKUP_BASENAME = 'VOUG請求情報.json';
+  const BACKUP_FILENAME = 'VOUG請求情報.json';
 
-  function backupFilename(date = new Date()){
-    return `${date.getMonth()+1}月分_${BACKUP_BASENAME}`;
-  }
   function isAndroidDevice(){
     return /Android/i.test(navigator.userAgent || '');
   }
@@ -396,6 +428,23 @@
     const el=$('#toast'); el.textContent=msg; el.classList.add('show');
     clearTimeout(window.__toastTimer);
     window.__toastTimer=setTimeout(()=>el.classList.remove('show'),1800);
+  }
+  let choiceResolver = null;
+  function closeChoiceModal(answer){
+    const modal = $('#choiceModal');
+    modal.hidden = true;
+    const resolver = choiceResolver;
+    choiceResolver = null;
+    if(resolver) resolver(Boolean(answer));
+  }
+  function showChoiceModal(message, noLabel='いいえ', yesLabel='はい'){
+    if(choiceResolver) closeChoiceModal(false);
+    $('#choiceMessage').textContent = message;
+    $('#choiceNoBtn').textContent = noLabel;
+    $('#choiceYesBtn').textContent = yesLabel;
+    $('#choiceModal').hidden = false;
+    requestAnimationFrame(()=>$('#choiceNoBtn').focus());
+    return new Promise((resolve)=>{ choiceResolver = resolve; });
   }
 
   function defaultItem(){
@@ -524,6 +573,7 @@
         <div class="sectionTitle">明細（複数行）</div>
         ${itemRows}
         <button class="addItemBtn primary" type="button">＋ 商品を追加</button>
+        <button class="saveInvoiceBtn saveBtn" type="button">保存</button>
 
         <div class="row"><div class="label">税率</div><input class="tax_rate" inputmode="decimal" value="${escapeHtml(inv.tax_rate)}" placeholder="0.10" /></div>
 
@@ -561,6 +611,12 @@
       state.invoices[i].items.push(defaultItem());
       render();
     });
+    c.querySelector('.saveInvoiceBtn').addEventListener('click',()=>{
+      const i=Number(c.dataset.idx);
+      state.invoices[i].collapsed = true;
+      render();
+      toast('入力内容を保存しました');
+    });
 
     c.addEventListener('input',(e)=>{
       const target=e.target;
@@ -592,7 +648,9 @@
 
     const delBtn = c.querySelector('.delBtn');
     if(delBtn){
-      delBtn.addEventListener('click',()=>{
+      delBtn.addEventListener('click',async()=>{
+        const shouldDelete = await showChoiceModal('本当に削除しますか？', 'いいえ', 'はい');
+        if(!shouldDelete) return;
         const i=Number(c.dataset.idx);
         state.invoices.splice(i,1);
         if(state.invoices.length===0) state.invoices.push(defaultInvoice());
@@ -720,7 +778,7 @@
   async function save(){
     const backup = exportStateAsBackupObject();
     const text = JSON.stringify(backup, null, 2);
-    const filename = backupFilename();
+    const filename = BACKUP_FILENAME;
 
     // Android版のFile System Access APIでは0バイトファイルが残る場合があるため使わない。
     if(!isAndroidDevice() && typeof window.showSaveFilePicker === 'function'){
@@ -873,6 +931,69 @@
     });
   }
 
+  async function shareOrDownloadPdf(doc, filename){
+    let pdfFile;
+    try{
+      const pdfBlob = doc.output('blob');
+      if(!pdfBlob || pdfBlob.size === 0) throw new Error('empty_pdf_blob');
+      pdfFile = new File([pdfBlob], filename, {
+        type:'application/pdf',
+        lastModified:Date.now()
+      });
+    }catch(err){
+      console.warn('Failed to prepare PDF for sharing:', err);
+      doc.save(filename);
+      toast('PDFを保存しました');
+      return;
+    }
+
+    const shareData = { title:'VOUG請求書', files:[pdfFile] };
+    const canShareFiles = typeof navigator.share === 'function'
+      && typeof navigator.canShare === 'function'
+      && navigator.canShare({files:[pdfFile]});
+
+    if(!canShareFiles){
+      doc.save(filename);
+      toast('PDFを保存しました');
+      return;
+    }
+
+    const tryShare = async()=>{
+      try{
+        await navigator.share(shareData);
+        toast('PDFを共有しました');
+        return 'shared';
+      }catch(err){
+        if(err && err.name === 'AbortError'){
+          toast('共有をキャンセルしました');
+          return 'cancelled';
+        }
+        console.warn('Failed to share PDF:', err);
+        return 'failed';
+      }
+    };
+
+    let result = await tryShare();
+    if(result !== 'failed') return;
+
+    // PDF生成中にユーザー操作の有効時間が切れた場合は、再タップで共有する。
+    const shouldRetry = await showChoiceModal(
+      'PDFの準備ができました。共有先を表示します。',
+      '閉じる',
+      '共有する'
+    );
+    if(!shouldRetry){
+      toast('共有をキャンセルしました');
+      return;
+    }
+
+    result = await tryShare();
+    if(result === 'failed'){
+      doc.save(filename);
+      toast('共有できなかったためPDFを保存しました');
+    }
+  }
+
   async function generatePdf(invoices){
     const { jsPDF } = window.jspdf || {};
     if(!jsPDF || !window.html2canvas){
@@ -901,14 +1022,21 @@
       : `${baseCustomer}ほか${invoices.length-1}件`;
     const safeName = `${issueLabel} - ${customerLabel}`.replace(/[\\/:*?"<>|]/g, '_');
     const filename = `${safeName}.pdf`;
-    doc.save(filename);
-    toast('PDFを作成しました');
+    await shareOrDownloadPdf(doc, filename);
   }
 
   // ===== イベント =====
   $('#addBtn').addEventListener('click',()=>{ state.invoices.push(defaultInvoice()); render(); toast('請求先カードを追加しました'); });
   $('#saveBtn').addEventListener('click',save);
   $('#loadBtn').addEventListener('click',load);
+  $('#choiceNoBtn').addEventListener('click',()=>closeChoiceModal(false));
+  $('#choiceYesBtn').addEventListener('click',()=>closeChoiceModal(true));
+  $('#choiceModal').addEventListener('click',(e)=>{
+    if(e.target === e.currentTarget) closeChoiceModal(false);
+  });
+  document.addEventListener('keydown',(e)=>{
+    if(e.key === 'Escape' && !$('#choiceModal').hidden) closeChoiceModal(false);
+  });
   $('#backupFileInput').addEventListener('change', async(e)=>{
     const input = e.target;
     if(!(input instanceof HTMLInputElement)) return;
