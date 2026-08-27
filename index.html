@@ -248,7 +248,7 @@
   </div>
 
   <div class="wrap">
-    <div class="appVersion">VOUG I.B. ver-6</div>
+    <div class="appVersion">VOUG I.B. ver-7</div>
 
     <div class="bar">
       <button id="addBtn">＋ 請求先カードを追加</button>
@@ -347,7 +347,14 @@
 
   const $ = (s)=>document.querySelector(s);
   const invoicesEl = $('#invoices');
-  const BACKUP_FILENAME = 'VOUG請求情報.json';
+  const BACKUP_BASENAME = 'VOUG請求情報.json';
+
+  function backupFilename(date = new Date()){
+    return `${date.getMonth()+1}月分_${BACKUP_BASENAME}`;
+  }
+  function isAndroidDevice(){
+    return /Android/i.test(navigator.userAgent || '');
+  }
 
   const DEFAULT_COMMON = {
     issuer_name: 'VOUG',
@@ -678,37 +685,64 @@
       reader.readAsText(file, 'utf-8');
     });
   }
-  async function save(){
-    const backup = exportStateAsBackupObject();
-    const text = JSON.stringify(backup, null, 2);
-    try{
-      if(window.showSaveFilePicker){
-        const handle = await window.showSaveFilePicker({
-          suggestedName: BACKUP_FILENAME,
-          types: [{
-            description: 'JSON',
-            accept: { 'application/json': ['.json'] }
-          }]
-        });
-        const writable = await handle.createWritable();
-        await writable.write(text);
-        await writable.close();
-        toast('JSONバックアップを保存しました');
-        return;
-      }
-    }catch(err){
-      if(err && err.name === 'AbortError') return;
-    }
+  function downloadBackup(text, filename){
     const blob = new Blob([text], {type:'application/json;charset=utf-8'});
+    if(blob.size === 0) throw new Error('empty_backup_blob');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = BACKUP_FILENAME;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 500);
-    toast('JSONバックアップを保存しました');
+    // Androidではダウンロード開始が遅れる場合があるため、URLをすぐ破棄しない。
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }
+  async function saveWithFilePicker(text, filename){
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{
+        description: 'JSON',
+        accept: { 'application/json': ['.json'] }
+      }]
+    });
+    const writable = await handle.createWritable();
+    await writable.write(new Blob([text], {type:'application/json;charset=utf-8'}));
+    await writable.close();
+
+    // 「空ファイルを作っただけ」を成功扱いしないよう、保存後に読み戻して確認する。
+    const savedFile = await handle.getFile();
+    const savedText = await readTextFile(savedFile);
+    if(savedFile.size === 0 || savedText !== text){
+      throw new Error('backup_verification_failed');
+    }
+  }
+  async function save(){
+    const backup = exportStateAsBackupObject();
+    const text = JSON.stringify(backup, null, 2);
+    const filename = backupFilename();
+
+    // Android版のFile System Access APIでは0バイトファイルが残る場合があるため使わない。
+    if(!isAndroidDevice() && typeof window.showSaveFilePicker === 'function'){
+      try{
+        await saveWithFilePicker(text, filename);
+        toast('JSONバックアップを保存しました');
+        return;
+      }catch(err){
+        if(err && err.name === 'AbortError') return;
+        console.error('Failed to save VOUG invoice backup:', err);
+        toast('保存に失敗しました');
+        return;
+      }
+    }
+
+    try{
+      downloadBackup(text, filename);
+      toast('JSONバックアップの保存を開始しました');
+    }catch(err){
+      console.error('Failed to download VOUG invoice backup:', err);
+      toast('保存に失敗しました');
+    }
   }
   async function load(){
     try{
